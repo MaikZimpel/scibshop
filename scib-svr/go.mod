@@ -7,4 +7,5 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/julienschmidt/httprouter v1.3.0
 	google.golang.org/api v0.20.0
+	google.golang.org/grpc v1.28.0
 )

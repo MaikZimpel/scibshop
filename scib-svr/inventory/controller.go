@@ -3,18 +3,17 @@ package inventory
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"scib-svr/helpers"
 	"strconv"
 )
 
-const(
-	REQUEST_URI = "inventory"
+const (
+	RequestUri = "inventory"
 )
 
-func Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params)  {
+func Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	queryValues := r.URL.Query()
 	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
 	fmt.Fprint(w, allItems(stockableOnly))
@@ -23,25 +22,56 @@ func Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params)  {
 func GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
 	item, err := itemById(ps.ByName("id"))
 	if err != nil {
-		qErr := err.(helpers.QueryError)
-		http.Error(w, qErr.Message, qErr.Code)
+		switch e := err.(type) {
+		case helpers.QueryError:
+			http.Error(w, e.Message, e.Code)
+		default:
+			http.Error(w, e.Error(), http.StatusInternalServerError)
+		}
 	} else {
 		_, _ = fmt.Fprintf(w, item.String())
 	}
 }
 
-func Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params)  {
-	var i Item
-	err := json.NewDecoder(r.Body).Decode(&i)
+func Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	i, err := bodyToItem(r, w)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	createdItemId, err := insertItem(i)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	_, _ = fmt.Fprintf(w, "http://"+r.Host+r.URL.String()+"/"+createdItemId)
+}
+
+func Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	i, err := bodyToItem(r, w)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	id := ps.ByName("id")
+	if id == "" || i.Id != id {
+		http.Error(w, "id field can not be updated", http.StatusConflict)
+		return
+	}
+	statusCode, refSelf, err := upsertItem(i, r.Host + "/" +RequestUri)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
-		i.Id = uuid.New().String()
-		createdItemId, addErr := addItem(i)
-		if addErr != nil {
-			http.Error(w, addErr.Error(), http.StatusInternalServerError)
-		} else {
-			_, _ = fmt.Fprintf(w, "http://" + r.Host + r.URL.String() + "/" + createdItemId)
+		w.WriteHeader(statusCode)
+		if statusCode == http.StatusCreated {
+			_, _ = fmt.Fprintf(w, refSelf)
 		}
 	}
+}
+
+func bodyToItem(r *http.Request, w http.ResponseWriter) (Item, error) {
+	var i Item
+	err := json.NewDecoder(r.Body).Decode(&i)
+	return i, err
 }

@@ -7,15 +7,21 @@ import (
 	"net/http"
 	"os"
 	"scib-svr/inventory"
+	"scib-svr/shopping"
 )
 
 func main() {
 	router := httprouter.New()
 
+	// inventory routes
 	router.GET("/", defaultHandler)
-	router.GET("/" + inventory.REQUEST_URI + "/", inventory.Get)
-	router.GET("/" + inventory.REQUEST_URI + "/:id", inventory.GetById)
-	router.POST("/" + inventory.REQUEST_URI, inventory.Create)
+	router.GET(makeUri(inventory.RequestUri, nil), inventory.Get)
+	router.GET(makeUri(inventory.RequestUri, []string{"id"}), inventory.GetById)
+	router.POST(makeUri(inventory.RequestUri, nil), inventory.Create)
+	router.PUT(makeUri(inventory.RequestUri, []string{"id"}), inventory.Update)
+
+	// shop routes
+	router.PUT(makeUri(shopping.RequestUri, []string{"id"}), shopping.AddToCart)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -30,4 +36,14 @@ func main() {
 
 func defaultHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	_, _ = fmt.Fprintf(w, "<H1>Welcome to SCIB</H1>")
+}
+
+func makeUri(uri string, params []string) string {
+	var paramStr string
+	if params != nil {
+		for _, param := range params {
+			paramStr += "/:" + param
+		}
+	}
+	return fmt.Sprintf("/%s%s",uri, paramStr)
 }

@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	INVENTORY_COLLECTION = "inventory"
-	STORE_COLLECTION     = "store"
-	projectID            = "scib-279217"
+	InventoryCollection = "inventory"
+	StoreCollection     = "store"
+	SupplierCollection  = "suppliers"
+	projectID           = "scib-279217"
 )
 
 type QueryError struct {
