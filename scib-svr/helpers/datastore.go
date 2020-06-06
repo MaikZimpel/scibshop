@@ -11,6 +11,7 @@ const (
 	InventoryCollection = "inventory"
 	StoreCollection     = "store"
 	SupplierCollection  = "suppliers"
+	CartCollection      = "carts"
 	projectID           = "scib-279217"
 )
 

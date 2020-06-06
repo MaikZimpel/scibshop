@@ -25,6 +25,7 @@ type Item struct {
 	Images      []string             `json:"images"`
 	Stockable   bool                 `json:"stockable"`
 	Suppliers   []*external.Supplier `json:"suppliers"`
+	SkuSuffix   string               `json:"sku_suffix"`
 }
 
 func (i *Item) String() string {
@@ -62,13 +63,13 @@ func allItems(stockableOnly bool) []*Item {
 	client, ctx := helpers.DataStoreClient()
 	defer client.Close()
 	if stockableOnly {
-		return transform(client.Collection(helpers.InventoryCollection).Where("Stockable", "==", stockableOnly).Documents(ctx))
+		return Transform(client.Collection(helpers.InventoryCollection).Where("Stockable", "==", stockableOnly).Documents(ctx))
 	} else {
-		return transform(client.Collection(helpers.InventoryCollection).Documents(ctx))
+		return Transform(client.Collection(helpers.InventoryCollection).Documents(ctx))
 	}
 }
 
-func transform(iter *firestore.DocumentIterator) []*Item {
+func Transform(iter *firestore.DocumentIterator) []*Item {
 	var items []*Item
 	for {
 		docRef, e := iter.Next()
