@@ -3,6 +3,7 @@ package inventory
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/martian/log"
 	"github.com/julienschmidt/httprouter"
 	"net/http"
 	"scib-svr/helpers"
@@ -16,7 +17,12 @@ const (
 func Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	queryValues := r.URL.Query()
 	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
-	fmt.Fprint(w, allItems(stockableOnly))
+	items, err := allItems(stockableOnly)
+	if err != nil {
+		log.Errorf("error retrieving inventory items: %+v", err)
+		return
+	}
+	_, _ = fmt.Fprint(w, items)
 }
 
 func GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
@@ -34,7 +40,7 @@ func GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
 }
 
 func Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	i, err := bodyToItem(r, w)
+	i, err := bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -49,7 +55,7 @@ func Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 }
 
 func Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	i, err := bodyToItem(r, w)
+	i, err := bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -70,7 +76,7 @@ func Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	}
 }
 
-func bodyToItem(r *http.Request, w http.ResponseWriter) (Item, error) {
+func bodyToItem(r *http.Request) (Item, error) {
 	var i Item
 	err := json.NewDecoder(r.Body).Decode(&i)
 	return i, err

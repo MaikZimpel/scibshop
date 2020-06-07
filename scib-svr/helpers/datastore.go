@@ -4,7 +4,10 @@ import (
 	"cloud.google.com/go/firestore"
 	"context"
 	"encoding/json"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"log"
+	"net/http"
 )
 
 const (
@@ -27,6 +30,18 @@ func (q QueryError) Error() string {
 
 func Error(message string, code int) error {
 	return QueryError{message, code}
+}
+
+func MapError(err error) (string, int) {
+	switch status.Code(err) {
+	case codes.NotFound:
+		{
+			return http.StatusText(http.StatusNotFound), http.StatusNotFound
+		}
+	default:
+		return http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
+
+	}
 }
 
 func DataStoreClient() (*firestore.Client, context.Context) {

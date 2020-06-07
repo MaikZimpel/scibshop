@@ -59,7 +59,7 @@ func upsertItem(item Item, path string) (int, string, error) {
 	return retCode, retValue, nil
 }
 
-func allItems(stockableOnly bool) []*Item {
+func allItems(stockableOnly bool) ([]*Item, error) {
 	client, ctx := helpers.DataStoreClient()
 	defer client.Close()
 	if stockableOnly {
@@ -69,7 +69,7 @@ func allItems(stockableOnly bool) []*Item {
 	}
 }
 
-func Transform(iter *firestore.DocumentIterator) []*Item {
+func Transform(iter *firestore.DocumentIterator) ([]*Item, error) {
 	var items []*Item
 	for {
 		docRef, e := iter.Next()
@@ -80,10 +80,13 @@ func Transform(iter *firestore.DocumentIterator) []*Item {
 			fmt.Println(e)
 		}
 		var item *Item
-		docRef.DataTo(&item)
+		err := docRef.DataTo(&item)
+		if err != nil {
+			return nil, err
+		}
 		items = append(items, item)
 	}
-	return items
+	return items, nil
 }
 
 func itemById(id string) (*Item, error) {
@@ -91,23 +94,11 @@ func itemById(id string) (*Item, error) {
 	defer client.Close()
 	docRef, err := client.Collection(helpers.InventoryCollection).Doc(id).Get(ctx)
 	if err != nil {
-		msg, code := mapError(err)
+		msg, code := helpers.MapError(err)
 		return nil, helpers.Error(msg, code)
 	} else {
 		var item *Item
-		docRef.DataTo(&item)
-		return item, nil
-	}
-}
-
-func mapError(err error) (string, int) {
-	switch status.Code(err) {
-	case codes.NotFound:
-		{
-			return http.StatusText(http.StatusNotFound), http.StatusNotFound
-		}
-	default:
-		return http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
-
+		err = docRef.DataTo(&item)
+		return item, err
 	}
 }

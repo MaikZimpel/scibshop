@@ -21,7 +21,10 @@ func main() {
 	router.PUT(makeUri(inventory.RequestUri, []string{"id"}), inventory.Update)
 
 	// shop routes
-	router.PUT(makeUri(shopping.RequestUri, []string{"id"}), shopping.AddToCart)
+	router.GET(makeUri(shopping.RequestUri, nil), shopping.Get)
+	router.GET(makeUri(shopping.RequestUri, []string{"id"}), shopping.GetById)
+	router.POST(makeUri(shopping.RequestUri, nil), shopping.Post)
+	router.PUT(makeUri(shopping.RequestUri, []string{"id"}), shopping.Put)
 
 	port := os.Getenv("PORT")
 	if port == "" {

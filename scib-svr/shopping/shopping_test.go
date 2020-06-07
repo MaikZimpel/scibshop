@@ -29,7 +29,7 @@ func TestPick(t *testing.T) {
 		}
 	} {
 		{store["1"], 3, exp {nil, Cart{cartId, getPicks(map[string]int{"1":3}, &store)}}},
-		{store["2"], 4, exp {fmt.Errorf("not enough items of %s in stock. wanted: %d, available: %d", store["2"].Sku, 4, store["2"].Cnt), cart}},
+		{store["2"], 4, exp {fmt.Errorf("not enough items of %s in insert. wanted: %d, available: %d", store["2"].Sku, 4, store["2"].Cnt), cart}},
 		{store["3"], 1, exp {fmt.Errorf("item %s is unavaiable", store["3"].Sku), cart}},
 	}
 
