@@ -10,10 +10,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 	"net/http"
 	"scib-svr/configuration"
 	"scib-svr/logging"
+	"time"
 )
 
 type mongostore struct {
@@ -39,7 +39,10 @@ func (m mongostore) Insert(c context.Context, collection string, id string, docu
 
 func (m mongostore) Upsert(c context.Context, collection string, id string, document interface{}, replace bool) (status int, err error) {
 	if replace {
+		m.log.Debug(c, "before findoneandreplace %#v", time.Now())
 		sr := m.client.Database(m.db).Collection(collection).FindOneAndReplace(c, bson.D{{"_id", id}}, document)
+		m.log.Debug(c, "after findoneandreplace %#v", time.Now())
+		m.log.Debug(c, "result %#v", sr)
 		if sr.Err() == mongo.ErrNoDocuments {
 			status, err = m.update(c, collection, id, document)
 		}
@@ -98,8 +101,11 @@ func (m mongostore) Delete(c context.Context, collection string, id string) (res
 }
 
 func (m mongostore) Read(c context.Context, collection string, id string, whereClauses []WhereClause) (resultVector []map[string]interface{}, err error) {
+	m.log.Debug(c, "call read on mongostore")
 	if id != "" {
+		m.log.Debug(c, "before read %#v", time.Now())
 		singleResult := m.client.Database(m.db).Collection(collection).FindOne(c, bson.D{{"_id", id}})
+		m.log.Debug(c, "after read %#v", time.Now())
 		if singleResult.Err() == mongo.ErrNoDocuments {
 			err = &DsError{
 				Code: NotFound,
@@ -123,6 +129,9 @@ func (m mongostore) Read(c context.Context, collection string, id string, whereC
 				}
 			}
 		}
+	}
+	if err != nil {
+		m.log.Error(c, "%s", err.Error())
 	}
 	return
 }
@@ -173,10 +182,15 @@ func opToMongoOp(op string) (mop string) {
 }
 
 func NewMongostore() Datastore {
-	clientOptions := options.Client().ApplyURI(fmt.Sprintf("mongodb://%s:%d", configuration.MongoDbHost, configuration.MongoDbPort))
+	clientOptions := options.Client().ApplyURI(
+		fmt.Sprintf("mongodb://%s:%d", configuration.MongoDbHost, configuration.MongoDbPort))
 	client, err := mongo.Connect(context.Background(), clientOptions)
+	log := logging.New()
 	if err != nil {
-		log.Fatalf("unable to connect to mongodb %v", err)
+		log.Critical(context.Background(), "unable to connect to mongodb %v", err)
+	} else {
+		log.Info(context.Background(), "connected to database at %s",
+			fmt.Sprintf("mongodb://%s:%d", configuration.MongoDbHost, configuration.MongoDbPort))
 	}
 	return &mongostore{
 		client: client,

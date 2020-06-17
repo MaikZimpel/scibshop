@@ -5,7 +5,7 @@
 package configuration
 
 const (
-	MongoDbHost = "localhost"
+	MongoDbHost = "mongodb"
 	MongoDbPort = 27017
 	MongoDbDatabase = "scib_db"
 )

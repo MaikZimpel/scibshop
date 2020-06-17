@@ -10,7 +10,7 @@ class Inventory extends Component {
     }
 
     componentDidMount() {
-        fetch(process.env.REACT_APP_SVR_URL + "/inventory?stockableOnly=false")
+        fetch("http://localhost:8082/inventory?stockableOnly=false")
             .then(res => res.json())
             .then((data) => {
                 this.setState({inventoryItems: data})

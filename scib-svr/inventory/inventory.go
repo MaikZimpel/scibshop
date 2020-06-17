@@ -42,10 +42,12 @@ func NewItem() *Item {
 
 type Service struct {
 	ds datastore.Datastore
+	log logging.Logger
 }
 
 func NewService(datastore datastore.Datastore) *Service {
-	return &Service{datastore}
+	log := logging.New()
+	return &Service{datastore, log}
 }
 
 func (s *Service) save(item *Item) (int, string, error) {
@@ -57,6 +59,7 @@ func (s *Service) save(item *Item) (int, string, error) {
 }
 
 func (s *Service) allItems(stockableOnly bool) (itemVector []*Item, err error) {
+	s.log.Debug(context.Background(), "call allItems")
 	whereClauses := func() []datastore.WhereClause {
 		if stockableOnly {
 			return []datastore.WhereClause{{Path: "Stockable", Op: "==", Value: stockableOnly}}
@@ -72,6 +75,9 @@ func (s *Service) allItems(stockableOnly bool) (itemVector []*Item, err error) {
 				itemVector = append(itemVector, item)
 			}
 		}
+	}
+	if err != nil {
+		s.log.Error(context.Background(), "%s", err)
 	}
 	return
 }

@@ -33,7 +33,7 @@ func NewController(service *Service) *Controller {
 }
 
 func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	httputil.EnableCors(&w, "http://35.242.197.63")
+	httputil.EnableCors(&w, "http://localhost:3001")
 	c.l.Debug(context.Background(), "inventory requested by %s", r.RemoteAddr)
 	queryValues := r.URL.Query()
 	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
@@ -49,6 +49,7 @@ func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 }
 
 func (c *Controller) GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
+	httputil.EnableCors(&w, "http://localhost:3001")
 	item, err := c.s.itemById(ps.ByName("id"))
 	if err != nil {
 		code := func() int {
@@ -70,6 +71,7 @@ func (c *Controller) GetById(w http.ResponseWriter, _ *http.Request, ps httprout
 }
 
 func (c *Controller) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	httputil.EnableCors(&w, "http://localhost:3001")
 	i, err := bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -85,6 +87,7 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request, _ httprouter
 }
 
 func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	httputil.EnableCors(&w, "http://localhost:3001")
 	i, err := bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -107,7 +110,8 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 func (c *Controller) SignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	httputil.EnableCors(&w, "http://35.242.197.63")
+	httputil.EnableCors(&w, "http://localhost:3001")
+
 	// Accepts only POST method.
 	// Otherwise, this handler returns 405.
 	if r.Method != "POST" {
