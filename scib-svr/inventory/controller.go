@@ -1,60 +1,90 @@
 package inventory
 
 import (
+	"cloud.google.com/go/storage"
 	"encoding/json"
 	"fmt"
-	"github.com/google/martian/log"
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
+	"golang.org/x/net/context"
+	"golang.org/x/oauth2/google"
+	"io/ioutil"
 	"net/http"
-	"scib-svr/helpers"
+	"os"
+	"scib-svr/datastore"
+	"scib-svr/httputil"
+	"scib-svr/logging"
 	"strconv"
+	"time"
 )
 
 const (
 	RequestUri = "inventory"
 )
 
-func Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	queryValues := r.URL.Query()
-	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
-	items, err := allItems(stockableOnly)
-	if err != nil {
-		log.Errorf("error retrieving inventory items: %+v", err)
-		return
-	}
-	_, _ = fmt.Fprint(w, items)
+type Controller struct {
+	s *Service
+	l logging.Logger
 }
 
-func GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
-	item, err := itemById(ps.ByName("id"))
+func NewController(service *Service) *Controller {
+	logger := logging.New()
+	return &Controller{service, logger}
+}
+
+func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	httputil.EnableCors(&w, "http://35.242.197.63")
+	c.l.Debug(context.Background(), "inventory requested by %s", r.RemoteAddr)
+	queryValues := r.URL.Query()
+	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
+	items, err := c.s.allItems(stockableOnly)
 	if err != nil {
-		switch e := err.(type) {
-		case helpers.QueryError:
-			http.Error(w, e.Message, e.Code)
-		default:
-			http.Error(w, e.Error(), http.StatusInternalServerError)
-		}
+		c.l.Error(context.Background(),"error retrieving inventory items: %+v", err)
+		return
+	}
+	err = json.NewEncoder(w).Encode(items)
+	if err != nil {
+		_, _ = fmt.Fprintf(w, "an error occured: %+v", err.Error())
+	}
+}
+
+func (c *Controller) GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
+	item, err := c.s.itemById(ps.ByName("id"))
+	if err != nil {
+		code := func() int {
+			switch e:= err.(type) {
+			case *datastore.DsError:
+				if e.Code == datastore.NotFound {
+					return http.StatusNotFound
+				} else {
+					return http.StatusInternalServerError
+				}
+			default:
+				return http.StatusInternalServerError
+			}
+		}()
+		http.Error(w, err.Error(),code)
 	} else {
 		_, _ = fmt.Fprintf(w, item.String())
 	}
 }
 
-func Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (c *Controller) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	i, err := bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	createdItemId, err := insertItem(i)
+	sts, createdItemId, err := c.s.save(&i)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(sts)
 	_, _ = fmt.Fprintf(w, "http://"+r.Host+r.URL.String()+"/"+createdItemId)
 }
 
-func Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	i, err := bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -65,19 +95,72 @@ func Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "id field can not be updated", http.StatusConflict)
 		return
 	}
-	statusCode, refSelf, err := upsertItem(i, r.Host + "/" +RequestUri)
+	sts, itemId, err := c.s.save(&i)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
-		w.WriteHeader(statusCode)
-		if statusCode == http.StatusCreated {
-			_, _ = fmt.Fprintf(w, refSelf)
+		w.WriteHeader(sts)
+		if sts == http.StatusCreated {
+			_, _ = fmt.Fprintf(w, "http://"+r.Host+r.URL.String()+"/"+itemId)
 		}
 	}
 }
 
-func bodyToItem(r *http.Request) (Item, error) {
-	var i Item
-	err := json.NewDecoder(r.Body).Decode(&i)
-	return i, err
+func (c *Controller) SignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	httputil.EnableCors(&w, "http://35.242.197.63")
+	// Accepts only POST method.
+	// Otherwise, this handler returns 405.
+	if r.Method != "POST" {
+		w.Header().Set("Allow", "POST")
+		http.Error(w, "Only POST is supported", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ct := r.FormValue("content_type")
+	if ct == "" {
+		http.Error(w, "content_type must be set", http.StatusBadRequest)
+		return
+	}
+
+	// Generates an object key for use in new Cloud Storage Object.
+	// It's not duplicate with any object keys because of UUID.
+	key := uuid.New().String()
+	if ext := r.FormValue("ext"); ext != "" {
+		key += fmt.Sprintf(".%s", ext)
+	}
+
+	saKeyFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	saKey, err := ioutil.ReadFile(saKeyFile)
+	if err != nil {
+		c.l.Error(r.Context(), "%v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	cfg, err := google.JWTConfigFromJSON(saKey)
+	if err != nil {
+		c.l.Error(r.Context(), "%v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	// Generates a signed URL for use in the PUT request to GCS.
+	// Generated URL should be expired after 15 mins.
+	url, err := storage.SignedURL("scib-279217.appspot.com", key, &storage.SignedURLOptions{
+		GoogleAccessID: cfg.Email,
+		PrivateKey: cfg.PrivateKey,
+		Method:         "PUT",
+		Expires:        time.Now().Add(15 * time.Minute),
+		ContentType:    ct,
+
+	})
+	if err != nil {
+		c.l.Error(r.Context(), "sign: failed to sign, err = %v\n", err)
+		http.Error(w, "failed to sign by internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintln(w, url)
+}
+
+func bodyToItem(r *http.Request) (item Item, err error) {
+	err = json.NewDecoder(r.Body).Decode(&item)
+	return
 }

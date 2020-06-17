@@ -1,5 +1,6 @@
 import React, {Component} from "react";
 import './scib-content.scss'
+import {connect} from "react-redux";
 
 class ScibContent extends Component {
 
@@ -8,15 +9,6 @@ class ScibContent extends Component {
         this.state = {
             storeItems: []
         }
-    }
-
-    componentDidMount() {
-        fetch('http://localhost:8082/store')
-            .then(res => res.json())
-            .then((data) => {
-                this.setState({storeItems: data})
-            })
-            .catch(console.log)
     }
 
     render() {
@@ -28,5 +20,11 @@ class ScibContent extends Component {
     }
 }
 
-export default ScibContent;
+const mapStateToProps = (state) => {
+    return {
+        storeItems: state.storeItems
+    }
+}
+
+export default connect(mapStateToProps) (ScibContent);
 

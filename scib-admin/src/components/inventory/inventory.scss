@@ -1,0 +1,37 @@
+.inv-main {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.inv-card-container {
+  margin: 5px;
+}
+
+.root {
+  min-width: 33vw;
+}
+
+.media {
+  height: 25px;
+  width: 25px;
+  object-fit: contain;
+}
+
+._avatar {
+  background-color: red;
+}
+
+.horizontal-box {
+  display: flex;
+  flex-direction: row;
+  margin-left: 2vh;
+}
+
+._form {
+  margin: 5px;
+}
+
+.input-field {
+  width: 25ch;
+}

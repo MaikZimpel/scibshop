@@ -4,3 +4,6 @@ scib-svr/helpers/scib-data-account.json
 *.yarn.lock
 node_modules
 /scib-web/yarn.lock
+/scib-svr/datastore/scib-data-account.json
+/scib-web/build/
+/scib-web/yarn-error.log

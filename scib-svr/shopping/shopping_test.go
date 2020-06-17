@@ -1,14 +1,6 @@
 package shopping
 
-import (
-	"encoding/json"
-	"fmt"
-	"github.com/google/uuid"
-	"scib-svr/inventory"
-	"testing"
-)
-
-func TestPick(t *testing.T) {
+/*func TestPick(t *testing.T) {
 	store := testStore()
 	type exp struct {
 		err error
@@ -99,4 +91,4 @@ func testStore() map[string]*StoreItem {
 		},
 	}
 	return store
-}
+}*/
