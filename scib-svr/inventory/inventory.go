@@ -1,10 +1,15 @@
 package inventory
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/secsy/goftp"
+	"io/ioutil"
+	"os"
+	"scib-svr/configuration"
 	"scib-svr/datastore"
 	"scib-svr/logging"
 	"strconv"
@@ -41,13 +46,22 @@ func NewItem() *Item {
 }
 
 type Service struct {
-	ds datastore.Datastore
-	log logging.Logger
+	ds        datastore.Datastore
+	log       logging.Logger
+	ftpClient *goftp.Client
 }
 
-func NewService(datastore datastore.Datastore) *Service {
-	log := logging.New()
-	return &Service{datastore, log}
+func NewService(datastore datastore.Datastore, logger logging.Logger) *Service {
+
+	ftpClient, err := goftp.DialConfig(goftp.Config{
+		User:     configuration.FtpUser,
+		Password: configuration.FtpPassword,
+	}, configuration.FtpServer)
+
+	if err != nil {
+		logger.Critical(context.Background(), "connection to ftp server failed %v", err)
+	}
+	return &Service{datastore, logger, ftpClient}
 }
 
 func (s *Service) save(item *Item) (int, string, error) {
@@ -179,5 +193,58 @@ func toStringArray(i []interface{}) []string {
 }
 
 func toInt(i map[string]interface{}) (int, error) {
-	return strconv.Atoi(fmt.Sprintf("%s",i["$numberInt"]))
+	return strconv.Atoi(fmt.Sprintf("%s", i["$numberInt"]))
 }
+
+func (s *Service) uploadImage(item *Item, file []byte, ext string) (fsName string, err error) {
+	fsName = fmt.Sprintf("%s%s", uuid.New().String(), ext)
+	currentDir, _ := s.ftpClient.Getwd()
+	s.log.Debug(context.Background(), "current working directory %s", currentDir)
+	path := fmt.Sprintf("%s/images/%s/images/%s",currentDir, item.Id, fsName)
+	//err = cdMkDir(s.ftpClient, []string{"images", item.Id, "images"})
+
+	err = s.ftpClient.Store(path, bytes.NewBuffer(file))
+	if err == nil {
+		currentDir, _ := s.ftpClient.Getwd()
+		s.log.Debug(context.Background(), "save image as %s", currentDir+"/"+fsName)
+		item.Images = append(item.Images, fsName)
+		_, _, err = s.save(item)
+	}
+
+	return
+}
+
+func (s *Service) downloadImage(itemId string, fileName string) (file []byte, err error) {
+	path := fmt.Sprintf("images/%s/images/%s", itemId, fileName)
+	imgFile, err := os.Create(fileName)
+	if err == nil {
+		err := s.ftpClient.Retrieve(path, imgFile)
+		defer func() {
+			err := os.Remove(fileName)
+			if err != nil {
+				s.log.Error(context.Background(), "error closing ftp response %v", err)
+			}
+		}()
+		if err == nil {
+			file, err = ioutil.ReadFile(fileName)
+		}
+	}
+	return
+}
+
+/*func cdMkDir(conn *goftp.Client, path []string) (err error) {
+	if len(path) > 0 {
+		pathElem := path[0]
+		err = conn.(pathElem)
+		if err != nil {
+			err = conn.MakeDir(pathElem)
+			if err == nil {
+				err = conn.ChangeDir(pathElem)
+			}
+		}
+		path[0] = ""
+		path = path[1:]
+		err = cdMkDir(conn, path)
+	}
+	return
+}*/

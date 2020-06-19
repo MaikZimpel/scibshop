@@ -1,25 +1,20 @@
 package inventory
 
 import (
-	"cloud.google.com/go/storage"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/context"
-	"golang.org/x/oauth2/google"
-	"io/ioutil"
 	"net/http"
-	"os"
+	"path/filepath"
 	"scib-svr/datastore"
 	"scib-svr/httputil"
 	"scib-svr/logging"
 	"strconv"
-	"time"
 )
 
 const (
-	RequestUri = "inventory"
+	RequestUri = "/inventory"
 )
 
 type Controller struct {
@@ -27,14 +22,13 @@ type Controller struct {
 	l logging.Logger
 }
 
-func NewController(service *Service) *Controller {
-	logger := logging.New()
-	return &Controller{service, logger}
+func NewController(service *Service, logger logging.Logger) *Controller {
+	log := logger
+	return &Controller{service, log}
 }
 
 func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	httputil.EnableCors(&w, "http://localhost:3001")
-	c.l.Debug(context.Background(), "inventory requested by %s", r.RemoteAddr)
 	queryValues := r.URL.Query()
 	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
 	items, err := c.s.allItems(stockableOnly)
@@ -109,59 +103,59 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 }
 
-func (c *Controller) SignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (c *Controller) UploadImages(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	httputil.EnableCors(&w, "http://localhost:3001")
-
-	// Accepts only POST method.
-	// Otherwise, this handler returns 405.
-	if r.Method != "POST" {
-		w.Header().Set("Allow", "POST")
-		http.Error(w, "Only POST is supported", http.StatusMethodNotAllowed)
+	itemId := ps.ByName("id")
+	item, err := c.s.itemById(itemId)
+	if err != nil || item == nil {
+		if err == nil {
+			err = fmt.Errorf("item not found with id %s", itemId)
+		}
+		c.l.Error(r.Context(), "item not found with id %s", itemId)
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-
-	ct := r.FormValue("content_type")
-	if ct == "" {
-		http.Error(w, "content_type must be set", http.StatusBadRequest)
-		return
-	}
-
-	// Generates an object key for use in new Cloud Storage Object.
-	// It's not duplicate with any object keys because of UUID.
-	key := uuid.New().String()
-	if ext := r.FormValue("ext"); ext != "" {
-		key += fmt.Sprintf(".%s", ext)
-	}
-
-	saKeyFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	saKey, err := ioutil.ReadFile(saKeyFile)
+	err = r.ParseMultipartForm(50000000) // max 500KB per pic
 	if err != nil {
-		c.l.Error(r.Context(), "%v", err)
+		c.l.Error(r.Context(), "%s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	file, handler, err := r.FormFile("originalFile")
+	if err != nil {
+		c.l.Error(r.Context(), "%s", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	cfg, err := google.JWTConfigFromJSON(saKey)
-	if err != nil {
-		c.l.Error(r.Context(), "%v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	// Generates a signed URL for use in the PUT request to GCS.
-	// Generated URL should be expired after 15 mins.
-	url, err := storage.SignedURL("scib-279217.appspot.com", key, &storage.SignedURLOptions{
-		GoogleAccessID: cfg.Email,
-		PrivateKey: cfg.PrivateKey,
-		Method:         "PUT",
-		Expires:        time.Now().Add(15 * time.Minute),
-		ContentType:    ct,
-
-	})
-	if err != nil {
-		c.l.Error(r.Context(), "sign: failed to sign, err = %v\n", err)
-		http.Error(w, "failed to sign by internal server error", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintln(w, url)
+	defer file.Close()
+	var bytes = make([]byte, handler.Size)
+	_, err = file.Read(bytes)
+	if err != nil {
+		c.l.Error(r.Context(), "%s", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	imgName, err := c.s.uploadImage(item, bytes, filepath.Ext(handler.Filename))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = fmt.Fprintf(w, imgName)
+	}
+}
+
+func (c *Controller) GetImage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	itemId := ps.ByName("id")
+	fileName := ps.ByName("fileName")
+	image, err := c.s.downloadImage(itemId, fileName)
+	if err != nil {
+		c.l.Error(r.Context(), "file not found with filename %s", fileName)
+		http.Error(w, err.Error(), http.StatusNotFound)
+	} else {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(image)
+	}
 }
 
 func bodyToItem(r *http.Request) (item Item, err error) {

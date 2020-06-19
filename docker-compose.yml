@@ -26,6 +26,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - mongodb
+      - ftp
     ports:
       - "8082:8082"
     networks:
@@ -38,9 +39,21 @@ services:
       - "mongodata:/data/db"
     networks:
       - network1
+  ftp:
+    image: delfer/alpine-ftp-server
+    ports:
+      - "21:21"
+      - "21000-21010:21000-21010"
+    environment:
+      - "USERS=scib|bics"
+      - "ADDRESS=0.0.0.0"
+    restart: on-failure
+    networks:
+      - network1
 
 volumes:
   mongodata:
+  imagedata:
 
 networks:
   network1:

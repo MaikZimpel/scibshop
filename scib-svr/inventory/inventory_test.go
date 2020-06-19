@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"reflect"
 	"scib-svr/datastore"
+	"scib-svr/logging"
 	"testing"
 )
 
@@ -13,7 +14,7 @@ type InventoryServiceTest struct {
 
 func NewInventoryServiceTest() *InventoryServiceTest {
 	return &InventoryServiceTest{
-		NewService(datastore.NewFirestoreDatastore()),
+		NewService(datastore.New(), logging.New()),
 	}
 }
 

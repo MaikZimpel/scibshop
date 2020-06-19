@@ -101,11 +101,8 @@ func (m mongostore) Delete(c context.Context, collection string, id string) (res
 }
 
 func (m mongostore) Read(c context.Context, collection string, id string, whereClauses []WhereClause) (resultVector []map[string]interface{}, err error) {
-	m.log.Debug(c, "call read on mongostore")
 	if id != "" {
-		m.log.Debug(c, "before read %#v", time.Now())
 		singleResult := m.client.Database(m.db).Collection(collection).FindOne(c, bson.D{{"_id", id}})
-		m.log.Debug(c, "after read %#v", time.Now())
 		if singleResult.Err() == mongo.ErrNoDocuments {
 			err = &DsError{
 				Code: NotFound,

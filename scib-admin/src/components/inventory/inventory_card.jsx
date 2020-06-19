@@ -11,8 +11,9 @@ import MoreVertIcon from '@material-ui/icons/MoreVert';
 import TextField from '@material-ui/core/TextField';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import axios from 'axios'
-
-import placeholder from './tots_priple.jpg'
+import Fab from '@material-ui/core/Fab';
+import AddIcon from '@material-ui/icons/Add';
+import DeleteIcon from '@material-ui/icons/Delete';
 
 const useStyles = makeStyles((theme) => ({
     root: {
@@ -48,43 +49,48 @@ export default function InventoryCard(props) {
 
     const classes = useStyles();
 
-    function updateItem(axiosResponse) {
-        console.log(JSON.stringify(axiosResponse))
+    function addImage(axiosResponse) {
+        const imagePath = axiosResponse.data
+        console.log(imagePath)
+        let imageArray = item.images
+        if (imageArray == null){
+            imageArray = []
+        }
+        imageArray.push(imagePath)
+        setItem({...item, images: imageArray})
+    }
+
+    function removeImage(ix) {
+        let imageArray = item.images
+        imageArray.splice(ix,1)
+        setItem({...item, images: imageArray})
     }
 
     const onFileChange = event => {
         // get signed url from backend
         const formData = new FormData()
         formData.append("content_type", "image/jpeg")
-        const requestOptions = {
-            method: 'POST',
-            body: formData
-        }
         const file = event.target.files[0]
-        fetch(process.env.REACT_APP_SVR_URL + "/inventory/images/upload", requestOptions)
-            .then((res) => res.text())
-            .then((url) => uploadPicture(url, file))
-            .then(updateItem)
+        formData.append('originalFile', file)
+        axios.post("http://localhost:8082/inventory/"+item.id+"/images", formData)
+            .then(addImage)
             .catch((ex) => console.log(ex))
-
     }
 
-    const uploadPicture = (url, file) => {
-        console.log(url)
-        console.log(file.name)
-        console.log(item.id)
-        const formData = new FormData()
-        formData.append('image', file, item.sku + "-" + item.color + "-" + file.name)
-        return axios.post(url, formData)
+    function deletePicture(imageName, imgIndex) {
+        axios.delete("http://localhost:8082/inventory/"+item.id+"/images/"+imageName)
+            .then(removeImage(imgIndex))
+            .catch((ex) => console.log(ex))
     }
 
     return (
         <Card className={classes.root} variant={"outlined"} elevation={2}>
             <CardHeader
                 avatar={
-                    <Avatar aria-label="inventory-item" className={"_avatar"}>
-                        IC
-                    </Avatar>
+                    item.images ?
+                        <img alt={""} className={"avtr-pic"} src={"http://localhost:8082/inventory/" + item.id + "/images/" + item.images[0]}/>
+                        :
+                        <Avatar aria-label="inventory-item" className={"_avatar"}/>
                 }
                 action={
                     <IconButton aria-label="actions">
@@ -99,18 +105,43 @@ export default function InventoryCard(props) {
                     item.images ?
                     item.images.map((val, index) => {
                         return (
-                            <CardMedia
-                                className={"media"}
-                                image={val}
-                            />
+                            <div key={index} className={"container"}>
+                                <img className={"image"} alt={""} src={"http://localhost:8082/inventory/" + item.id + "/images/" + val}/>
+                                <div className={"middle"}>
+                                    <Fab
+                                        color="primary"
+                                        size="small"
+                                        component="div"
+                                        aria-label="add"
+                                        variant="extended"
+                                    >
+                                        <DeleteIcon onClick={event => deletePicture(val, index)}/>
+                                    </Fab>
+                                </div>
+                            </div>
+
+
                         );
                     }): <div/>
                 }
             </div>
             <CardContent>
                 <div className={"horizontal-box"}>
-                    <form onSubmit={uploadPicture}>
-                        <input type={"file"} onChange={onFileChange}/>
+                    <form>
+                        <label htmlFor={"upload-picture"}>
+                            <input style={{display: 'none'}} id={"upload-picture"} name={"upload-picture"}
+                                   type={"file"} onChange={onFileChange} aria-label={"Add picture"}/>
+                            <Fab
+                                color="primary"
+                                size="small"
+                                component="div"
+                                aria-label="add"
+                                variant="extended"
+                            >
+                                <AddIcon />
+                            </Fab>
+                        </label>
+
                     </form>
                 </div>
             </CardContent>

@@ -10,30 +10,31 @@ import (
 	"scib-svr/datastore"
 	"scib-svr/inventory"
 	"scib-svr/logging"
-	"scib-svr/shopping"
 )
 
 func main() {
 	router := httprouter.New()
-
-	inventoryService := inventory.NewController(inventory.NewService(datastore.New()))
+	log := logging.New()
+	inventoryController := inventory.NewController(inventory.NewService(datastore.New(), log), log)
 
 	// inventory routes
 	router.GET("/", defaultHandler)
-	router.GET(makeUri(inventory.RequestUri, nil), inventoryService.Get)
-	router.GET(makeUri(inventory.RequestUri, []string{"id"}), inventoryService.GetById)
-	router.POST(makeUri(inventory.RequestUri, nil), inventoryService.Create)
-	router.PUT(makeUri(inventory.RequestUri, []string{"id"}), inventoryService.Update)
-	router.POST(makeUri(inventory.RequestUri + "/images/upload", nil), inventoryService.SignedUrl)
+	router.GET(inventory.RequestUri, inventoryController.Get)
+	router.GET(inventory.RequestUri + "/:id", inventoryController.GetById)
+	router.POST(inventory.RequestUri, inventoryController.Create)
+	router.PUT(inventory.RequestUri + "/:id", inventoryController.Update)
+	router.POST(inventory.RequestUri + "/:id/images", inventoryController.UploadImages)
+	router.GET(inventory.RequestUri + "/:id/images/:fileName", inventoryController.GetImage)
+
 
 	// shop routes
 	/*router.GET(makeUri(shopping.RequestUri, nil), shopping.Get)
 	router.GET(makeUri(shopping.RequestUri, []string{"id"}), shopping.GetById)
-	router.POST(makeUri(shopping.RequestUri, nil), shopping.Post)*/
-	router.PUT(makeUri(shopping.RequestUri, []string{"id"}), shopping.Put)
+	router.POST(makeUri(shopping.RequestUri, nil), shopping.Post)
+	router.PUT(makeUri(shopping.RequestUri, []string{"id"}), shopping.Put)*/
 
 	port := os.Getenv("PORT")
-	log := logging.New()
+
 	if port == "" {
 		port = "8082"
 		log.Info(context.Background(),"Defaulting to port %s", port)
@@ -51,12 +52,4 @@ func defaultHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	_, _ = fmt.Fprintf(w, "<H1>Welcome to SCIB</H1>")
 }
 
-func makeUri(uri string, params []string) string {
-	var paramStr string
-	if params != nil {
-		for _, param := range params {
-			paramStr += "/:" + param
-		}
-	}
-	return fmt.Sprintf("/%s%s",uri, paramStr)
-}
+//

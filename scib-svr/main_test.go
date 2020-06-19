@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"scib-svr/inventory"
 	"testing"
 )
@@ -25,4 +26,15 @@ func TestMakeUri(t *testing.T) {
 			t.Errorf("TestMakeUri failed. Got: %s, wanted: %s.", result, table.expected)
 		}
 	}
+}
+
+
+func makeUri(uri string, params []string) string {
+	var paramStr string
+	if params != nil {
+		for _, param := range params {
+			paramStr += "/:" + param
+		}
+	}
+	return fmt.Sprintf("/%s%s",uri, paramStr)
 }
