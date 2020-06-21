@@ -201,8 +201,6 @@ func (s *Service) uploadImage(item *Item, file []byte, ext string) (fsName strin
 	currentDir, _ := s.ftpClient.Getwd()
 	s.log.Debug(context.Background(), "current working directory %s", currentDir)
 	path := fmt.Sprintf("%s/images/%s/images/%s",currentDir, item.Id, fsName)
-	//err = cdMkDir(s.ftpClient, []string{"images", item.Id, "images"})
-
 	err = s.ftpClient.Store(path, bytes.NewBuffer(file))
 	if err == nil {
 		currentDir, _ := s.ftpClient.Getwd()
@@ -210,7 +208,6 @@ func (s *Service) uploadImage(item *Item, file []byte, ext string) (fsName strin
 		item.Images = append(item.Images, fsName)
 		_, _, err = s.save(item)
 	}
-
 	return
 }
 
@@ -232,19 +229,21 @@ func (s *Service) downloadImage(itemId string, fileName string) (file []byte, er
 	return
 }
 
-/*func cdMkDir(conn *goftp.Client, path []string) (err error) {
-	if len(path) > 0 {
-		pathElem := path[0]
-		err = conn.(pathElem)
-		if err != nil {
-			err = conn.MakeDir(pathElem)
-			if err == nil {
-				err = conn.ChangeDir(pathElem)
+func (s *Service) deleteImage(itemId string, fileName string)  (err error) {
+	item, err := s.itemById(itemId)
+	if err == nil {
+		for i,v := range item.Images {
+			if v == fileName {
+				copy(item.Images[i:], item.Images[i+1:])
+				item.Images[len(item.Images) - 1] = ""
+				item.Images = item.Images[:len(item.Images) - 1]
+				_, _, err = s.save(item)
+				if err == nil {
+					err = s.ftpClient.Delete(fmt.Sprintf("images/%s/images/%s", itemId, fileName))
+				}
+				break
 			}
 		}
-		path[0] = ""
-		path = path[1:]
-		err = cdMkDir(conn, path)
 	}
 	return
-}*/
+}

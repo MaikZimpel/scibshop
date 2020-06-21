@@ -1,6 +1,7 @@
 import React, {Component} from "react";
 import InventoryCard from "./inventory_card";
 import './inventory.scss'
+import axios from 'axios'
 
 class Inventory extends Component {
 
@@ -10,8 +11,13 @@ class Inventory extends Component {
     }
 
     componentDidMount() {
-        fetch("http://localhost:8082/inventory?stockableOnly=false")
-            .then(res => res.json())
+        let req = {
+            url: "http://localhost/inventory/?stockableOnly=false",
+            method: 'GET',
+            mode: 'no-cors'
+        };
+        axios(req)
+            .then(res => res.data)
             .then((data) => {
                 this.setState({inventoryItems: data})
             })

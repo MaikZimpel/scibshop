@@ -28,7 +28,9 @@ services:
       - mongodb
       - ftp
     ports:
-      - "8082:8082"
+      - "80:80"
+    environment:
+      - "PORT=80"
     networks:
       - network1
   mongodb:
@@ -57,3 +59,4 @@ volumes:
 
 networks:
   network1:
+    driver: bridge

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"scib-svr/datastore"
-	"scib-svr/httputil"
 	"scib-svr/logging"
 	"strconv"
 )
@@ -28,7 +27,7 @@ func NewController(service *Service, logger logging.Logger) *Controller {
 }
 
 func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	httputil.EnableCors(&w, "http://localhost:3001")
+	//httputil.EnableCors(&w, "http://localhost:3001")
 	queryValues := r.URL.Query()
 	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
 	items, err := c.s.allItems(stockableOnly)
@@ -43,7 +42,7 @@ func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 }
 
 func (c *Controller) GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
-	httputil.EnableCors(&w, "http://localhost:3001")
+	//httputil.EnableCors(&w, "http://localhost:3001")
 	item, err := c.s.itemById(ps.ByName("id"))
 	if err != nil {
 		code := func() int {
@@ -65,8 +64,8 @@ func (c *Controller) GetById(w http.ResponseWriter, _ *http.Request, ps httprout
 }
 
 func (c *Controller) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	httputil.EnableCors(&w, "http://localhost:3001")
-	i, err := bodyToItem(r)
+	//httputil.EnableCors(&w, "http://localhost:3001")
+	i, err := c.bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -81,8 +80,7 @@ func (c *Controller) Create(w http.ResponseWriter, r *http.Request, _ httprouter
 }
 
 func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	httputil.EnableCors(&w, "http://localhost:3001")
-	i, err := bodyToItem(r)
+	i, err := c.bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -104,7 +102,6 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httproute
 }
 
 func (c *Controller) UploadImages(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	httputil.EnableCors(&w, "http://localhost:3001")
 	itemId := ps.ByName("id")
 	item, err := c.s.itemById(itemId)
 	if err != nil || item == nil {
@@ -127,7 +124,12 @@ func (c *Controller) UploadImages(w http.ResponseWriter, r *http.Request, ps htt
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			c.l.Error(r.Context(), "%v", err)
+		}
+	}()
 	var bytes = make([]byte, handler.Size)
 	_, err = file.Read(bytes)
 	if err != nil {
@@ -151,14 +153,30 @@ func (c *Controller) GetImage(w http.ResponseWriter, r *http.Request, ps httprou
 	image, err := c.s.downloadImage(itemId, fileName)
 	if err != nil {
 		c.l.Error(r.Context(), "file not found with filename %s", fileName)
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, fmt.Errorf("image %s not found on server", fileName).Error(), http.StatusNotFound)
 	} else {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(image)
 	}
 }
 
-func bodyToItem(r *http.Request) (item Item, err error) {
+func (c *Controller) DeleteImage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	itemId := ps.ByName("id")
+	fileName := ps.ByName("fileName")
+	c.l.Debug(r.Context(), "request received to delete image %s/images/%s", itemId, fileName)
+	//httputil.EnableCors(&w, "*")
+
+	err := c.s.deleteImage(itemId, fileName)
+	if err != nil {
+		c.l.Error(r.Context(), "file deletion failed %v", err)
+		http.Error(w, "file deletion failed, ask your guy what went wrong", http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (c *Controller) bodyToItem(r *http.Request) (item Item, err error) {
 	err = json.NewDecoder(r.Body).Decode(&item)
+	c.l.Debug(context.Background(), "item %#v", item)
 	return
 }

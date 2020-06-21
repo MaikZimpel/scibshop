@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/julienschmidt/httprouter"
+	"github.com/rs/cors"
 	"golang.org/x/net/context"
 	"net/http"
 	"os"
@@ -16,7 +17,7 @@ func main() {
 	router := httprouter.New()
 	log := logging.New()
 	inventoryController := inventory.NewController(inventory.NewService(datastore.New(), log), log)
-
+	
 	// inventory routes
 	router.GET("/", defaultHandler)
 	router.GET(inventory.RequestUri, inventoryController.Get)
@@ -25,6 +26,7 @@ func main() {
 	router.PUT(inventory.RequestUri + "/:id", inventoryController.Update)
 	router.POST(inventory.RequestUri + "/:id/images", inventoryController.UploadImages)
 	router.GET(inventory.RequestUri + "/:id/images/:fileName", inventoryController.GetImage)
+	router.POST(inventory.RequestUri + "/:id/images/:fileName", inventoryController.DeleteImage)
 
 
 	// shop routes
@@ -40,12 +42,21 @@ func main() {
 		log.Info(context.Background(),"Defaulting to port %s", port)
 	}
 
+	corsHandler := cors.New(cors.Options{
+		AllowedOrigins:         []string{"http://localhost:3001"},
+		AllowedMethods:         []string{"OPTIONS","HEAD", "GET", "POST", "PUT"},
+		AllowedHeaders:         []string{"Content-Type", "Accept", "Access-Control-Allow-Origin, Authorization"},
+		AllowCredentials:       true,
+		OptionsPassthrough:     false,
+		Debug:                  true,
+	}).Handler(router)
+
 	log.Info(context.Background(),"Listening on port %s", port)
 	log.Info(context.Background(),"Open http://localhost:%s in the browser", port)
 	log.Info(context.Background(), "credentials file in %s", os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	log.Info(context.Background(), "db config %s", fmt.Sprintf("%s:%d/%s",configuration.MongoDbHost,
 		configuration.MongoDbPort, configuration.MongoDbDatabase))
-	log.Critical(context.Background(), "%s", http.ListenAndServe(fmt.Sprintf(":%s", port), router))
+	log.Critical(context.Background(), "%s", http.ListenAndServe(fmt.Sprintf(":%s", port), corsHandler))
 }
 
 func defaultHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
