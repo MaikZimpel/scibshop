@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/julienschmidt/httprouter"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/context"
 	"net/http"
 	"path/filepath"
-	"scib-svr/datastore"
 	"scib-svr/logging"
-	"strconv"
 )
 
 const (
@@ -27,50 +27,46 @@ func NewController(service *Service, logger logging.Logger) *Controller {
 }
 
 func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	//httputil.EnableCors(&w, "http://localhost:3001")
-	queryValues := r.URL.Query()
-	stockableOnly, _ := strconv.ParseBool(queryValues.Get("stockableOnly"))
-	items, err := c.s.allItems(stockableOnly)
+	items, err := c.s.queryItems(r.Context(), bson.M{})
 	if err != nil {
-		c.l.Error(context.Background(),"error retrieving inventory items: %+v", err)
-		return
+		_, _ = fmt.Fprintf(w, "an error occured: %+v", err.Error())
+	} else {
+		bytes, err := json.Marshal(items)
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(bytes)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprintf(w, "an error occured: %+v", err.Error())
+		}
 	}
-	err = json.NewEncoder(w).Encode(items)
+}
+
+func (c *Controller) GetById(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	item, err := c.s.byId(r.Context(), ps.ByName("id"))
+	if err == nil {
+		_, _ = fmt.Fprintf(w, "%v", item)
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(w, "an error occured: %+v", err.Error())
 	}
 }
 
-func (c *Controller) GetById(w http.ResponseWriter, _ *http.Request, ps httprouter.Params) {
-	//httputil.EnableCors(&w, "http://localhost:3001")
-	item, err := c.s.itemById(ps.ByName("id"))
+func (c *Controller) getWithFilter(ctx context.Context, filter bson.M) (items []Item, err error)  {
+	items, err = c.s.queryItems(ctx, filter)
 	if err != nil {
-		code := func() int {
-			switch e:= err.(type) {
-			case *datastore.DsError:
-				if e.Code == datastore.NotFound {
-					return http.StatusNotFound
-				} else {
-					return http.StatusInternalServerError
-				}
-			default:
-				return http.StatusInternalServerError
-			}
-		}()
-		http.Error(w, err.Error(),code)
-	} else {
-		_, _ = fmt.Fprintf(w, item.String())
+		c.l.Error(context.Background(), "error retrieving inventory items: %+v", err)
 	}
+	return
 }
 
 func (c *Controller) Create(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	//httputil.EnableCors(&w, "http://localhost:3001")
 	i, err := c.bodyToItem(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	sts, createdItemId, err := c.s.save(&i)
+	sts, createdItemId, err := c.s.save(r.Context(), &i)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -86,11 +82,11 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httproute
 		return
 	}
 	id := ps.ByName("id")
-	if id == "" || i.Id != id {
+	if id == "" || fmt.Sprint(i.Id) != id {
 		http.Error(w, "id field can not be updated", http.StatusConflict)
 		return
 	}
-	sts, itemId, err := c.s.save(&i)
+	sts, itemId, err := c.s.save(r.Context(), &i)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
@@ -101,10 +97,30 @@ func (c *Controller) Update(w http.ResponseWriter, r *http.Request, ps httproute
 	}
 }
 
-func (c *Controller) UploadImages(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (c *Controller) Delete(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	id := ps.ByName("id")
+	_, err := c.s.delete(r.Context(), id)
+	if err != nil {
+		code := func() int {
+			switch err {
+			case mongo.ErrNoDocuments: {
+				return http.StatusNotFound
+			}
+			default:
+				return http.StatusInternalServerError
+			}
+		}()
+		http.Error(w, err.Error(), code)
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (c *Controller) UploadImage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	itemId := ps.ByName("id")
-	item, err := c.s.itemById(itemId)
-	if err != nil || item == nil {
+	filter := bson.M {"_id": itemId}
+	items, err := c.getWithFilter(r.Context(), filter)
+	if err != nil || items == nil {
 		if err == nil {
 			err = fmt.Errorf("item not found with id %s", itemId)
 		}
@@ -137,23 +153,30 @@ func (c *Controller) UploadImages(w http.ResponseWriter, r *http.Request, ps htt
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	imgName, err := c.s.uploadImage(item, bytes, filepath.Ext(handler.Filename))
+
+	imgId, err := func() (string, error) {
+		if r.FormValue("isColorImage") == "true" {
+			return 	c.s.uploadCImage(r.Context(), &items[0], ItemColor{}, bytes, filepath.Ext(handler.Filename))
+		} else {
+			return c.s.uploadImage(r.Context(), &items[0], bytes, filepath.Ext(handler.Filename))
+		}
+	}()
+
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		c.l.Error(r.Context(), err.Error(), http.StatusInternalServerError)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		w.WriteHeader(http.StatusCreated)
-		_, _ = fmt.Fprintf(w, imgName)
+		_, _ = fmt.Fprintf(w, imgId)
 	}
 }
 
 func (c *Controller) GetImage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	itemId := ps.ByName("id")
-	fileName := ps.ByName("fileName")
-	image, err := c.s.downloadImage(itemId, fileName)
+	id := ps.ByName("imageId")
+	_, image, err := c.s.downloadImage(r.Context(), id)
 	if err != nil {
-		c.l.Error(r.Context(), "file not found with filename %s", fileName)
-		http.Error(w, fmt.Errorf("image %s not found on server", fileName).Error(), http.StatusNotFound)
+		c.l.Error(r.Context(), "file not found with id %s", id)
+		http.Error(w, fmt.Errorf("image %s not found on server", id).Error(), http.StatusNotFound)
 	} else {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(image)
@@ -161,12 +184,13 @@ func (c *Controller) GetImage(w http.ResponseWriter, r *http.Request, ps httprou
 }
 
 func (c *Controller) DeleteImage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	itemId := ps.ByName("id")
-	fileName := ps.ByName("fileName")
-	c.l.Debug(r.Context(), "request received to delete image %s/images/%s", itemId, fileName)
-	//httputil.EnableCors(&w, "*")
-
-	err := c.s.deleteImage(itemId, fileName)
+	items, err := c.getWithFilter(r.Context(), bson.M{"_id": ps.ByName("id")})
+	if err != nil {
+		c.l.Error(r.Context(), err.Error(), err)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+	err = c.s.deleteImage(r.Context(), ps.ByName("imageId"), &items[0])
 	if err != nil {
 		c.l.Error(r.Context(), "file deletion failed %v", err)
 		http.Error(w, "file deletion failed, ask your guy what went wrong", http.StatusInternalServerError)

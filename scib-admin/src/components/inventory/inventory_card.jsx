@@ -4,7 +4,6 @@ import Card from '@material-ui/core/Card';
 import CardHeader from '@material-ui/core/CardHeader';
 import CardContent from '@material-ui/core/CardContent';
 import CardFooter from '@material-ui/core/CardActions';
-import Avatar from '@material-ui/core/Avatar';
 import IconButton from '@material-ui/core/IconButton';
 import Checkbox from '@material-ui/core/Checkbox';
 import TextField from '@material-ui/core/TextField';
@@ -15,12 +14,13 @@ import AddIcon from '@material-ui/icons/Add';
 import DeleteIcon from '@material-ui/icons/Delete';
 import SaveIcon from '@material-ui/icons/Save';
 import CancelIcon from '@material-ui/icons/Cancel'
-import Typography from '@material-ui/core/Typography';
 import Collapse from '@material-ui/core/Collapse';
 import clsx from "clsx";
 import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
 import ShoppingCartIcon from '@material-ui/icons/ShoppingCart';
 import Grid from '@material-ui/core/Grid';
+import EuroSymbolIcon from '@material-ui/icons/EuroSymbol';
+import Paper from '@material-ui/core/Paper';
 
 const useStyles = makeStyles((theme) => ({
     root: {
@@ -32,7 +32,8 @@ const useStyles = makeStyles((theme) => ({
             'display': 'flex',
             'flex-direction': 'row',
             'align-items': 'flex-start',
-        }
+        },
+        '& .MuiCardHeader-subheader': {}
     },
     expand: {
         transform: 'rotate(0deg)',
@@ -62,28 +63,44 @@ export default function InventoryCard(props) {
     }
 
     /* Backend Data Structure
-    Id          string             `json:"id"`
-	Upc         string             `json:"upc"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Categories  []string           `json:"categories"`
-	Brand       string             `json:"brand"`
-	Size        string             `json:"size"`
-	Color       string             `json:"color"`
-	Price       int                `json:"price"`
-	Images      []string           `json:"images"`
-	Supplier    string             `json:"suppliers"`
-	Sku         string             `json:"sku"`
-	Cnt         int                `json:"cnt"`
-	Stockable   bool               `json:"stockable"`
-	Available   bool               `json:"available"`
+
+    type Item struct {
+	Id          string      `json:"id"`
+	Upc         string      `json:"upc"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Categories  []string    `json:"categories"`
+	Brand       string      `json:"brand"`
+	Sizes       []ItemSize  `json:"sizes"`
+	Colors      []ItemColor `json:"colors"`
+	Price       money.Money `json:"price"`
+	Images      []string    `json:"images"`
+	Supplier    string      `json:"supplier"`
+	Sku         string      `json:"sku"`
+	Cnt         int         `json:"cnt"`
+	Stockable   bool        `json:"stockable"`
+	Available   bool        `json:"available"`
+}
+
+type ItemColor struct {
+	Sku       string `json:"sku"`
+	Image     string `json:"image"`
+	ColorName string `json:"color_name"`
+	ColorCode string `json:"color_code"`
+}
+
+type ItemSize struct {
+	Sku      string `json:"sku"`
+	SizeName string `json:"size_name"`
+}
+
+
      */
 
     const classes = useStyles();
 
     function addImage(axiosResponse) {
         const imagePath = axiosResponse.data
-        console.log(imagePath)
         let imageArray = item.images
         if (imageArray == null) {
             imageArray = []
@@ -98,27 +115,78 @@ export default function InventoryCard(props) {
         setItem({...item, images: imageArray})
     }
 
+    function removeColor(ix) {
+        let colorArray = item.colors
+        colorArray.splice(ix, 1)
+        setItem({...item, colors: colorArray})
+    }
+
+    function addColorImage(axiosResponse) {
+        const imagePath = axiosResponse.data
+        let colorImage = {
+            image: imagePath,
+            color_name: "",
+            color_code: "",
+            sku: ""
+        }
+        let colorImageArray = item.colors == null ? [] : item.colors
+        console.log(colorImageArray)
+        colorImageArray.push(colorImage)
+        setItem({...item, colors: colorImageArray})
+    }
+
     const onFileChange = event => {
         // get signed url from backend
         const formData = new FormData()
         formData.append("content_type", "image/jpeg")
         const file = event.target.files[0]
         formData.append('originalFile', file)
-        axios.post("http://localhost/inventory/" + item.id + "/images", formData)
-            .then(addImage)
+        const targetId = event.target.id
+        if (targetId === 'upload-color-picture') {
+            formData.append('isColorImage', 'true')
+        }
+        console.log(targetId)
+        axios.post("http://localhost:8082/inventory/" + item.id + "/images", formData)
+            .then((response) => {
+                if (targetId === 'upload-picture') {
+                    addImage(response)
+                } else {
+                    addColorImage(response)
+                }
+            })
             .catch((ex) => console.log(ex))
     }
 
     function deletePicture(imageName, imgIndex) {
-        axios.post("http://localhost/inventory/" + item.id + "/images/" + imageName)
+        axios.delete("http://localhost:8082/inventory/" + item.id + "/images/" + imageName)
             .then(removeImage(imgIndex))
             .catch((ex) => console.log(ex))
     }
 
+    function deleteColor(itemColor, itmCIndex) {
+        console.log(itemColor.image)
+        axios.delete("http://localhost:8082/inventory/" + item.id + "/images/" + itemColor.image)
+            .then(removeColor(itmCIndex))
+            .catch((ex) => console.log(ex))
+    }
+
     const saveItem = async () => {
-        await axios.put("http://localhost/inventory/" + item.id, item)
-            .then(() => setSaveBtnDisabled(true))
-            .catch(x => console.log(x))
+        if (item.id) {
+            await axios.put("http://localhost:8082/inventory/" + item.id, item)
+                .then(() => setSaveBtnDisabled(true))
+                .catch(x => console.log(x))
+        } else {
+            await axios.post("http://localhost:8082/inventory", item)
+                .then(response => {
+                    if (response.status === 201) {
+                        let re = /(http:\/\/localhost:8082\/inventory\/)(.*)/
+                        item.id = re.exec(response.data)[2]
+                        setSaveBtnDisabled(true)
+                    } else {
+                        console.log("got unexpected response status: " + response.status)
+                    }
+                })
+        }
     };
 
     const resetItem = () => {
@@ -127,23 +195,35 @@ export default function InventoryCard(props) {
     }
 
     return (
-        <Card className={classes.root} variant={"outlined"} elevation={2} width={'50vh'}>
+        <Card className={classes.root} variant={"outlined"} elevation={2}>
             <CardHeader
                 avatar={
-                    item.images ?
+                    item.images && item.images.length > 0 ?
                         <img alt={""} className={"avtr-pic"}
-                             src={"http://localhost/inventory/" + item.id + "/images/" + item.images[0]}/>
+                             src={"http://localhost:8082/inventory/" + item.id + "/images/" + item.images[0]}/>
                         :
-                        <Avatar aria-label="inventory-item" className={"_avatar"}>
-                            <ShoppingCartIcon/>
-                        </Avatar>
+                        <ShoppingCartIcon fontSize={"large"}/>
+
                 }
                 title={item.name}
                 subheader={
-                    <div style={{overflow: "hidden", textOverflow: "ellipsis", width: '50vh'}}>
-                        <Typography display={"inline"} variant="body2" color="textSecondary" component="span">
-                            {item.description}
-                        </Typography>
+                    <div>
+                        <div className={"horizontal-box"}>
+                            <div>
+                                <EuroSymbolIcon fontSize={"small"}/>:
+                            </div>
+                            <div>
+                                {item.price.amount}
+                            </div>
+                        </div>
+                        <div className={"horizontal-box"}>
+                            <div>
+                                Quantity:
+                            </div>
+                            <div>
+                                {item.cnt}
+                            </div>
+                        </div>
                     </div>
                 }
             >
@@ -168,7 +248,7 @@ export default function InventoryCard(props) {
                                     return (
                                         <div key={index} className={"container"}>
                                             <img className={"image"} alt={""}
-                                                 src={"http://localhost/inventory/" + item.id + "/images/" + val}/>
+                                                 src={"http://localhost:8082/inventory/" + item.id + "/images/" + val}/>
                                             <div className={"middle"}>
                                                 <Fab
                                                     color="primary"
@@ -181,8 +261,6 @@ export default function InventoryCard(props) {
                                                 </Fab>
                                             </div>
                                         </div>
-
-
                                     );
                                 }) : <div/>
                         }
@@ -201,7 +279,7 @@ export default function InventoryCard(props) {
                     </div>
                 </CardContent>
                 <CardContent>
-                    <div className={classes.root} style={{width: '50vh'}}>
+                    <div className={classes.root} style={{width: '75vh'}}>
                         <Grid container spacing={1}>
                             <Grid item xs={12}>
                                 <TextField required id={"description"} value={item.description} label={"Description"}
@@ -212,87 +290,70 @@ export default function InventoryCard(props) {
                                            margin="dense" InputLabelProps={{shrink: true,}} multiline
                                            rows={4}
                                            variant={"outlined"}
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
                             </Grid>
                             <Grid item xs={4}>
-                                <TextField required id={"name"} value={item.name} label={"Name"} variant={"outlined"}
+                                <TextField disabled={item.id} required id={"name"} value={item.name} label={"Name"}
+                                           variant={"outlined"}
                                            margin="dense"
                                            onChange={e => {
                                                enableSaveBtn();
                                                setItem({...item, name: e.target.value});
                                            }}
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
                             </Grid>
-                            <Grid item xs={4}>
+                            {/*<Grid item xs={4}>
                                 <TextField id={"upc"} value={item.upc} label={"Upc"} variant={"outlined"}
-                                           onChange={e =>{
+                                           onChange={e => {
                                                enableSaveBtn();
                                                setItem({...item, upc: e.target.value});
                                            }}
                                            margin="dense"
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
-                            </Grid>
-                            <Grid item xs={4}>
-                                <TextField required id={"sku"} value={item.sku} label={"Sku"} variant={"outlined"}
+                            </Grid>*/}
+                            {/*<Grid item xs={4}>
+                                <TextField disabled id={"sku"} value={item.sku} label={"Sku"} variant={"outlined"}
                                            onChange={e => {
                                                enableSaveBtn();
                                                setItem({...item, sku: e.target.value});
                                            }}
                                            margin="dense"
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
-                            </Grid>
+                            </Grid>*/}
                             <Grid item xs={4}>
-                                <TextField id={"brand"} value={item.brand} label={"Brand"} variant={"outlined"}
+                                <TextField disabled={item.id} id={"brand"} required value={item.brand} label={"Brand"}
+                                           variant={"outlined"}
                                            onChange={e => {
                                                enableSaveBtn()
                                                setItem({...item, brand: e.target.value})
                                            }} margin="dense"
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
                             </Grid>
-                            <Grid item xs={4}>
-                                <TextField id={"size"} value={item.size} label={"Size"} variant={"outlined"}
+                            {/*<Grid item xs={4}>
+                                <TextField id={"size"} value={item.size} label={"Sizes"} variant={"outlined"}
                                            onChange={e => {
                                                enableSaveBtn();
                                                setItem({...item, size: e.target.value});
                                            }}
                                            margin="dense"
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
-                            </Grid>
+                            </Grid>*/}
+
                             <Grid item xs={4}>
-                                <TextField required id={"color"} value={item.color} label={"Color"} variant={"outlined"}
-                                           onChange={e => {
-                                               enableSaveBtn();
-                                               setItem({...item, color: e.target.value});
-                                           }}
-                                           margin="dense"
-                                           style={{width:'100%'}}
-                                />
-                            </Grid>
-                            <Grid item xs={4}>
-                                <TextField id={"price"} type={"number"} value={item.price} label={"Price"}
+                                <TextField id={"price"} type={"number"} value={item.price.amount} label={"Price"}
                                            variant={"outlined"}
                                            onChange={e => {
                                                enableSaveBtn();
                                                setItem({...item, price: Number(e.target.value)});
                                            }}
                                            margin="dense"
-                                           style={{width:'100%'}}
-                                />
-                            </Grid>
-                            <Grid item xs={4}>
-                                <TextField id={"supplier"} value={item.suppliers} label={"Supplier"} variant={"outlined"}
-                                           onChange={e => {
-                                               enableSaveBtn();
-                                               setItem({...item, suppliers: e.target.value});
-                                           }}
-                                           margin="dense"
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
                             </Grid>
                             <Grid item xs={4}>
@@ -303,9 +364,57 @@ export default function InventoryCard(props) {
                                                setItem({...item, cnt: Number(e.target.value)});
                                            }}
                                            margin="dense"
-                                           style={{width:'100%'}}
+                                           style={{width: '100%'}}
                                 />
-                            </Grid>
+                            </Grid><Grid item xs={4}>
+                            <Paper variant={"outlined"} style={{margin: "5px", padding: "5px"}}>
+                                {
+                                    item.colors ?
+                                        item.colors.map((itemColor, index) => {
+                                            return (
+                                                <div className={"container"}
+                                                     style={{height: "25px", width: "25px"}}>
+                                                    <div>
+                                                        <img key={index} alt={itemColor.color_name}
+                                                             className={"colorImage"}
+                                                             src={"http://localhost:8082/inventory/" + item.id + "/images/" + itemColor.image}/>
+
+                                                    </div>
+
+
+                                                    <div className={"middle"}>
+                                                        <Fab style={{height: "25px", width: "25px"}}
+                                                             size="small"
+                                                             component="div"
+                                                             aria-label="remove"
+                                                             variant="extended"
+                                                        >
+                                                            <DeleteIcon style={{height: "20px", width: "auto"}}
+                                                                        onClick={event => deleteColor(itemColor, index)}/>
+                                                        </Fab>
+                                                    </div>
+
+                                                </div>
+                                            )
+                                        }) : <div/>
+                                }
+                                <div>
+                                    <form>
+                                        <label htmlFor={"upload-color-picture"}>
+                                            <input style={{display: 'none'}} id={"upload-color-picture"}
+                                                   name={"upload-color-picture"}
+                                                   type={"file"} onChange={onFileChange}
+                                                   aria-label={"Add color picture"}/>
+                                            <IconButton size="small" component="div" aria-label="add"
+                                                        variant="extended">
+                                                <AddIcon/>
+                                            </IconButton>
+                                        </label>
+
+                                    </form>
+                                </div>
+                            </Paper>
+                        </Grid>
                             <Grid item xs={12}>
                                 <FormControlLabel control={
                                     <Checkbox
@@ -335,10 +444,10 @@ export default function InventoryCard(props) {
                 </CardContent>
                 <CardFooter>
                     <IconButton id={"cancelBtn"} aria-label={"cancel"} onClick={resetItem} disabled={saveBtnDisabled}>
-                        <CancelIcon />
+                        <CancelIcon/>
                     </IconButton>
                     <IconButton id={"saveBtn"} aria-label="save" onClick={saveItem} disabled={saveBtnDisabled}>
-                        <SaveIcon />
+                        <SaveIcon/>
                     </IconButton>
                 </CardFooter>
             </Collapse>

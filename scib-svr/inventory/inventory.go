@@ -1,249 +1,213 @@
 package inventory
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/secsy/goftp"
-	"io/ioutil"
-	"os"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"net/http"
 	"scib-svr/configuration"
-	"scib-svr/datastore"
+	"scib-svr/filestore"
 	"scib-svr/logging"
-	"strconv"
 	"strings"
+	"time"
 )
 
 type Item struct {
-	Id          string   `json:"id"`
-	Upc         string   `json:"upc"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Categories  []string `json:"categories"`
-	Brand       string   `json:"brand"`
-	Size        string   `json:"size"`
-	Color       string   `json:"color"`
-	Price       int      `json:"price"`
-	Images      []string `json:"images"`
-	Supplier    string   `json:"supplier"`
-	Sku         string   `json:"sku"`
-	Cnt         int      `json:"cnt"`
-	Stockable   bool     `json:"stockable"`
-	Available   bool     `json:"available"`
+	Id          string      `json:"id" bson:"_id, omitempty"`
+	Upc         string      `json:"upc" bson:"upc, omitempty"`
+	Name        string      `json:"name" bson:"name, omitempty"`
+	Description string      `json:"description" bson:"description, omitempty"`
+	Categories  []string    `json:"categories" bson:"categories, omitempty"`
+	Brand       string      `json:"brand" bson:"brand, omitempty"`
+	Sizes       []ItemSize  `json:"sizes" bson:"sizes, omitempty"`
+	Colors      []ItemColor `json:"colors" bson:"colors, omitempty"`
+	Price       float32     `json:"price" bson:"price, omitempty"`
+	Images      []string    `json:"images" bson:"images, omitempty"`
+	Supplier    string      `json:"supplier" bson:"supplier, omitempty"`
+	Sku         string      `json:"sku" bson:"sku, omitempty"`
+	Cnt         int         `json:"cnt" bson:"cnt, omitempty"`
+	Stockable   bool        `json:"stockable" bson:"stockable, omitempty"`
+	Available   bool        `json:"available" bson:"available, omitempty"`
+}
+
+type ItemColor struct {
+	Sku       string `json:"sku" bson:"sku, omitempty"`
+	Image     string `json:"image" bson:"image, omitempty"`
+	ColorName string `json:"color_name" bson:"colorName, omitempty"`
+	ColorCode string `json:"color_code" bson:"colorCode, omitempty"`
+}
+
+type ItemSize struct {
+	Sku      string `json:"sku" bson:"sku, omitempty"`
+	SizeName string `json:"size_name" bson:"sizeName, omitempty"`
 }
 
 const inventoryCollection = "inventory"
+const inventoryCollectionDeletedItems = "inventory-deleted"
 
 func (i *Item) String() string {
 	b, _ := json.Marshal(i)
 	return string(b)
 }
 
-func NewItem() *Item {
-	return &Item{}
+func (i *Item) addImage(id string) {
+	i.Images = append(i.Images, id)
+}
+
+func (i *Item) removeImage(id string) bool {
+	for x, v := range i.Images {
+		if v == id {
+			copy(i.Images[x:], i.Images[x+1:])
+			i.Images[len(i.Images)-1] = ""
+			i.Images = i.Images[:len(i.Images)-1]
+			return true
+		}
+	}
+	return false
+}
+
+func (i *Item) addItemColor(color ItemColor) {
+	i.Colors = append(i.Colors, color)
+}
+
+func (i *Item) removeItemColor(color ItemColor) bool {
+	for x, v := range i.Colors {
+		if v.Image == color.Image {
+			copy(i.Colors[x:], i.Colors[x+1:])
+			i.Colors = i.Colors[:len(i.Colors)-1]
+			return true
+		}
+	}
+	return false
 }
 
 type Service struct {
-	ds        datastore.Datastore
+	database  *mongo.Database
+	fs        filestore.Filestore
 	log       logging.Logger
-	ftpClient *goftp.Client
 }
 
-func NewService(datastore datastore.Datastore, logger logging.Logger) *Service {
+func (s *Service) collection(name string) *mongo.Collection  {
+	return s.database.Collection(name)
+}
 
-	ftpClient, err := goftp.DialConfig(goftp.Config{
-		User:     configuration.FtpUser,
-		Password: configuration.FtpPassword,
-	}, configuration.FtpServer)
-
-	if err != nil {
-		logger.Critical(context.Background(), "connection to ftp server failed %v", err)
+func NewService(filestore filestore.Filestore, logger logging.Logger) *Service {
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(fmt.Sprintf("mongodb://%s:%d",
+		configuration.MongoDbHost, configuration.MongoDbPort)))
+	if client != nil {
+		database := client.Database(configuration.MongoDbDatabase)
+		if err == nil {
+			return &Service{database, filestore, logger}
+		} else {
+			logger.Critical(context.Background(), "%v", err)
+			return nil
+		}
 	}
-	return &Service{datastore, logger, ftpClient}
+	return nil
 }
 
-func (s *Service) save(item *Item) (int, string, error) {
+func (s *Service) save(c context.Context, item *Item) (resultCode int, itemId string, err error) {
+	var uOptions = &options.UpdateOptions{}
+	uOptions.SetUpsert(true)
 	if item.Id == "" {
 		item.Id = uuid.New().String()
+		item.Sku = fmt.Sprintf("%s-%s-", strings.ToUpper(item.Brand[:4]), strings.ToUpper(item.Name[:4]))
 	}
-	sts, err := s.ds.Upsert(context.Background(), inventoryCollection, item.Id, &item, false)
-	return sts, item.Id, err
+	inventory := s.collection(inventoryCollection)
+	result, err := inventory.UpdateOne(c, bson.M{"_id": bson.M{"$eq": fmt.Sprint(item.Id)}}, bson.M{"$set": item}, uOptions)
+	if result != nil {
+		if result.UpsertedCount > 0 {
+			resultCode = http.StatusCreated
+			itemId = fmt.Sprint(result.UpsertedID)
+		} else {
+			resultCode = http.StatusNoContent
+		}
+	}
+	return
 }
 
-func (s *Service) allItems(stockableOnly bool) (itemVector []*Item, err error) {
-	s.log.Debug(context.Background(), "call allItems")
-	whereClauses := func() []datastore.WhereClause {
-		if stockableOnly {
-			return []datastore.WhereClause{{Path: "Stockable", Op: "==", Value: stockableOnly}}
-		} else {
-			return make([]datastore.WhereClause, 0)
+func (s *Service) byId(c context.Context, id string) (*Item, error) {
+	var item = &Item{}
+	sr := s.collection(inventoryCollection).FindOne(c, bson.M{"_id": id})
+	err := sr.Decode(item)
+	return item, err
+}
+
+func (s *Service) queryItems(c context.Context, filter bson.M) (itemVector []Item, err error) {
+	inventory := s.collection(inventoryCollection)
+	csr, err := inventory.Find(c, filter)
+	if err == nil && csr != nil {
+		if err = csr.All(c, &itemVector); err != nil {
+			s.log.Error(c, "%v", err)
 		}
-	}()
-	resultSlice, err := s.ds.Read(context.Background(), inventoryCollection, "", whereClauses)
-	if err == nil && resultSlice != nil {
-		for _, resultMap := range resultSlice {
-			item, err := mapToItem(resultMap)
+	}
+	return
+}
+
+func (s *Service) delete(c context.Context, id string) (item *Item, err error) {
+	inventory := s.collection(inventoryCollection)
+	delInventory := s.collection(inventoryCollectionDeletedItems)
+	sr := inventory.FindOne(c, bson.M{"_id": id})
+	if sr.Err() != nil && sr.Err() == mongo.ErrNoDocuments {
+		err = sr.Err()
+	} else {
+		err = sr.Decode(&item)
+		if err == nil {
+			_, err := delInventory.InsertOne(c, item)
 			if err == nil {
-				itemVector = append(itemVector, item)
+				_, err = inventory.DeleteOne(c, bson.M{"_id": id})
 			}
 		}
+	}
+	return
+}
+
+func (s *Service) uploadImage(c context.Context, item *Item, file []byte, ext string) (id string, err error) {
+	id, err = s.fs.Upload(c, file, ext)
+	if err == nil {
+		item.addImage(id)
+		_, _, err = s.save(c, item)
 	}
 	if err != nil {
-		s.log.Error(context.Background(), "%s", err)
+		s.log.Error(c, "upload of image failed because of %v", err)
 	}
 	return
 }
 
-func (s *Service) itemById(id string) (item *Item, err error) {
-	res, err := s.ds.Read(context.Background(), inventoryCollection, id, make([]datastore.WhereClause, 0))
-	if err == nil && res != nil {
-		item, err = mapToItem(res[0])
-	}
-	return
-}
-
-func (s *Service) delete(id string) (item *Item, err error) {
-	res, err := s.ds.Delete(context.Background(), inventoryCollection, id)
-	if err == nil && res != nil {
-		item, err = mapToItem(res)
-	}
-	return
-}
-
-func mapToItem(in map[string]interface{}) (*Item, error) {
-	var item Item
-	for k, v := range in {
-		err := set(k, v, &item)
-		if err != nil {
-			var errStrings []string
-			for _, er := range err {
-				errStrings = append(errStrings, er.Error())
-			}
-			return nil, fmt.Errorf(strings.Join(errStrings, "\n"))
-		}
-	}
-	return &item, nil
-}
-
-func set(field string, value interface{}, item *Item) (err []error) {
-	var e error
-	log := logging.New()
-	log.Debug(context.Background(), "%+v", value)
-	switch field {
-	case "Id":
-		item.Id = fmt.Sprintf("%s", value)
-	case "Upc":
-		item.Upc = fmt.Sprintf("%s", value)
-	case "Name":
-		item.Name = fmt.Sprintf("%s", value)
-	case "Description":
-		item.Description = fmt.Sprintf("%s", value)
-	case "Categories":
-		if value != nil {
-			item.Categories = toStringArray(value.([]interface{}))
-		}
-	case "Brand":
-		item.Brand = fmt.Sprintf("%s", value)
-	case "Size":
-		item.Size = fmt.Sprintf("%s", value)
-	case "Color":
-		item.Color = fmt.Sprintf("%s", value)
-	case "Images":
-		if value != nil {
-			item.Images = toStringArray(value.([]interface{}))
-		}
-	case "Supplier":
-		item.Supplier = fmt.Sprintf("%s", value)
-	case "Sku":
-		item.Sku = fmt.Sprintf("%s", value)
-	case "Price":
-		if value != nil {
-			item.Price, e = toInt(value.(map[string]interface{}))
-			if e != nil {
-				err = append(err, e)
-			}
-		}
-	case "Cnt":
-		if value != nil {
-			item.Cnt, e = toInt(value.(map[string]interface{}))
-			if e != nil {
-				err = append(err, e)
-			}
-		}
-	case "Stockable":
-		if value != nil {
-			item.Stockable = value.(bool)
-		}
-	case "Available":
-		if value != nil {
-			item.Available = value.(bool)
-		}
-	}
-	return
-}
-
-func toStringArray(i []interface{}) []string {
-	s := make([]string, len(i))
-	for x, v := range i {
-		s[x] = fmt.Sprintf("%s", v)
-	}
-	return s
-}
-
-func toInt(i map[string]interface{}) (int, error) {
-	return strconv.Atoi(fmt.Sprintf("%s", i["$numberInt"]))
-}
-
-func (s *Service) uploadImage(item *Item, file []byte, ext string) (fsName string, err error) {
-	fsName = fmt.Sprintf("%s%s", uuid.New().String(), ext)
-	currentDir, _ := s.ftpClient.Getwd()
-	s.log.Debug(context.Background(), "current working directory %s", currentDir)
-	path := fmt.Sprintf("%s/images/%s/images/%s",currentDir, item.Id, fsName)
-	err = s.ftpClient.Store(path, bytes.NewBuffer(file))
+func (s *Service) uploadCImage(c context.Context, item *Item, color ItemColor, file []byte, ext string) (id string, err error) {
+	id, err = s.fs.Upload(c, file, ext)
 	if err == nil {
-		currentDir, _ := s.ftpClient.Getwd()
-		s.log.Debug(context.Background(), "save image as %s", currentDir+"/"+fsName)
-		item.Images = append(item.Images, fsName)
-		_, _, err = s.save(item)
+		color.Image = id
+		item.addItemColor(color)
+		_, _, err = s.save(c, item)
+	}
+	if err != nil {
+		s.log.Error(c, "upload of item color image failed because of %v", err)
 	}
 	return
 }
 
-func (s *Service) downloadImage(itemId string, fileName string) (file []byte, err error) {
-	path := fmt.Sprintf("images/%s/images/%s", itemId, fileName)
-	imgFile, err := os.Create(fileName)
-	if err == nil {
-		err := s.ftpClient.Retrieve(path, imgFile)
-		defer func() {
-			err := os.Remove(fileName)
-			if err != nil {
-				s.log.Error(context.Background(), "error closing ftp response %v", err)
-			}
-		}()
+func (s *Service) downloadImage(c context.Context, id string) (size int64, file []byte, err error) {
+	return s.fs.Download(c, id)
+}
+
+func (s *Service) deleteImage(c context.Context, id string, item *Item) (err error) {
+	if item.removeImage(id) || item.removeItemColor(ItemColor{Image: id}) {
+		err = s.fs.Remove(c, id)
 		if err == nil {
-			file, err = ioutil.ReadFile(fileName)
+			_, _, err = s.save(c, item)
 		}
+	} else {
+		err = fmt.Errorf("image [%s]not found", id)
+	}
+	if err != nil {
+		s.log.Error(c, "removal of image [%s] failed because of %v", id, err)
 	}
 	return
 }
 
-func (s *Service) deleteImage(itemId string, fileName string)  (err error) {
-	item, err := s.itemById(itemId)
-	if err == nil {
-		for i,v := range item.Images {
-			if v == fileName {
-				copy(item.Images[i:], item.Images[i+1:])
-				item.Images[len(item.Images) - 1] = ""
-				item.Images = item.Images[:len(item.Images) - 1]
-				_, _, err = s.save(item)
-				if err == nil {
-					err = s.ftpClient.Delete(fmt.Sprintf("images/%s/images/%s", itemId, fileName))
-				}
-				break
-			}
-		}
-	}
-	return
-}

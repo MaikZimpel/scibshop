@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 	"scib-svr/configuration"
-	"scib-svr/datastore"
+	"scib-svr/filestore"
 	"scib-svr/inventory"
 	"scib-svr/logging"
 )
@@ -16,7 +16,9 @@ import (
 func main() {
 	router := httprouter.New()
 	log := logging.New()
-	inventoryController := inventory.NewController(inventory.NewService(datastore.New(), log), log)
+	inventoryController := inventory.NewController(
+		inventory.NewService(filestore.New(), log),
+		log)
 	
 	// inventory routes
 	router.GET("/", defaultHandler)
@@ -24,9 +26,10 @@ func main() {
 	router.GET(inventory.RequestUri + "/:id", inventoryController.GetById)
 	router.POST(inventory.RequestUri, inventoryController.Create)
 	router.PUT(inventory.RequestUri + "/:id", inventoryController.Update)
-	router.POST(inventory.RequestUri + "/:id/images", inventoryController.UploadImages)
-	router.GET(inventory.RequestUri + "/:id/images/:fileName", inventoryController.GetImage)
-	router.POST(inventory.RequestUri + "/:id/images/:fileName", inventoryController.DeleteImage)
+	router.DELETE(inventory.RequestUri + "/:id", inventoryController.Delete)
+	router.POST(inventory.RequestUri + "/:id/images", inventoryController.UploadImage)
+	router.GET(inventory.RequestUri + "/:id/images/:imageId", inventoryController.GetImage)
+	router.DELETE(inventory.RequestUri + "/:id/images/:imageId", inventoryController.DeleteImage)
 
 
 	// shop routes
@@ -43,8 +46,8 @@ func main() {
 	}
 
 	corsHandler := cors.New(cors.Options{
-		AllowedOrigins:         []string{"http://localhost:3001"},
-		AllowedMethods:         []string{"OPTIONS","HEAD", "GET", "POST", "PUT"},
+		AllowedOrigins:         []string{"http://localhost:*"},
+		AllowedMethods:         []string{"OPTIONS","HEAD", "GET", "POST", "PUT", "DELETE"},
 		AllowedHeaders:         []string{"Content-Type", "Accept", "Access-Control-Allow-Origin, Authorization"},
 		AllowCredentials:       true,
 		OptionsPassthrough:     false,

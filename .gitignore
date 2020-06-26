@@ -7,3 +7,4 @@ node_modules
 /scib-svr/datastore/scib-data-account.json
 /scib-web/build/
 /scib-web/yarn-error.log
+.DS_Store

@@ -2,13 +2,13 @@ import React from 'react';
 import './App.scss';
 import ScibHeader from "./components/scib_header/scib-header";
 import ScibFooter from "./components/scib-footer/scib-footer";
-import ScibContent from "./components/scib-content/scib-content";
+import {Shopfront} from "./components/scib-content/shopfront";
 
 function App() {
   return (
     <div className="App">
       <ScibHeader/>
-      <ScibContent/>
+      <Shopfront/>
       <ScibFooter/>
     </div>
   );

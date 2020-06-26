@@ -4,10 +4,6 @@
   flex-wrap: wrap;
 }
 
-.inv-card-container {
-  margin: 5px;
-}
-
 .root {
   min-width: 33vw;
 }
@@ -59,7 +55,6 @@
 .horizontal-box {
   display: flex;
   flex-direction: row;
-  margin-left: 2vh;
 }
 
 ._form {
@@ -73,4 +68,14 @@
 .vertical-center {
   margin: 1vh;
   position: center;
+}
+
+.selected {
+  border: 1px solid #61dafb;
+}
+
+.colorImage {
+  width: 25px;
+  height: auto;
+  object-fit: contain;
 }

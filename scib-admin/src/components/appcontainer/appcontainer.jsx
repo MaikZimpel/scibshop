@@ -4,6 +4,9 @@ import {makeStyles} from '@material-ui/core/styles';
 import Typography from '@material-ui/core/Typography';
 import Box from '@material-ui/core/Box';
 import Inventory from "../inventory/inventory";
+import AppBar from '@material-ui/core/AppBar';
+import Tabs from '@material-ui/core/Tabs';
+import Tab from '@material-ui/core/Tab';
 
 
 function TabPanel(props) {
@@ -57,8 +60,8 @@ export default function Appcontainer() {
 
 
         return (
-            <Inventory/>
-            /*<div className={classes.root}>
+
+            <div className={classes.root}>
                 <AppBar position={"static"}>
                     <Tabs value={value} onChange={handleChange} aria-label={"scib navigayion"}>
                         <Tab label="Inventory" {...a11yProps(0)}/>
@@ -85,7 +88,7 @@ export default function Appcontainer() {
                 <TabPanel value={value} index={4}>
                     <Reporting/>
                 </TabPanel>
-            </div>*/
+            </div>
         )
 
 }

@@ -1,19 +1,15 @@
 .logo {
   pointer-events: none;
-  width: calc(70vw * 0.9);
-  height: calc((70vw / 6) * 0.8);
+  float: top;
+  height: auto;
+  width: 99%;
 }
 
-.punchline {
-  font-size: medium;
-  font-weight: lighter;
-  display: flex;
-  align-items: center;
-  margin: auto;
+.clearfix {
+  overflow: auto;
 }
 
-.app-header {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.social-buttons {
+  margin-right: 10vh;
+  float: right;
 }

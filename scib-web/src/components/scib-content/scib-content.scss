@@ -1,3 +1,19 @@
+@import '../../App.scss';
+
 .content {
   min-height: 70vh;
+}
+
+.product-pic {
+  width: 150px;
+  height: auto;
+  margin: auto;
+  object-fit: contain;
+}
+
+.item-display {
+  display: flex;
+  flex-direction: column;
+  justify-items: center;
+  width: 70%;
 }
