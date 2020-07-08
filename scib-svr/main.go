@@ -51,7 +51,7 @@ func main() {
 		AllowedHeaders:         []string{"Content-Type", "Accept", "Access-Control-Allow-Origin, Authorization"},
 		AllowCredentials:       true,
 		OptionsPassthrough:     false,
-		Debug:                  true,
+		Debug:                  false,
 	}).Handler(router)
 
 	log.Info(context.Background(),"Listening on port %s", port)

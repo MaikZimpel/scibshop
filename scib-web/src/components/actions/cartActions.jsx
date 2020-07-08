@@ -1,29 +1,29 @@
 import {ADD_TO_CART, ADD_QUANTITY, ADD_SHIPPING, REMOVE_ITEM, SUB_QUANTITY} from "./action-types/cart-actions";
 
-export const add = (id) => {
+export const add = (sku) => {
     return {
         type: ADD_TO_CART,
-        id
+        sku
     }
 }
 
-export const inc = (id) => {
+export const inc = (sku) => {
     return {
         type : ADD_QUANTITY,
-        id
+        sku
     }
 }
 
-export const dec = (id) => {
+export const dec = (sku) => {
     return {
         type: SUB_QUANTITY,
-        id
+        sku
     }
 }
 
-export const rmv = (id) => {
+export const rmv = (sku) => {
     return {
         type: REMOVE_ITEM,
-        id
+        sku
     }
 }

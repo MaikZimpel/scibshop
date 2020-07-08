@@ -7,10 +7,11 @@ import Inventory from "../inventory/inventory";
 import AppBar from '@material-ui/core/AppBar';
 import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
+import {InventoryProvider} from "../inventory/inventoryContext";
 
 
 function TabPanel(props) {
-    const { children, value, index, ...other } = props;
+    const {children, value, index, ...other} = props;
 
     return (
         <div
@@ -59,37 +60,38 @@ export default function Appcontainer() {
     };
 
 
-        return (
-
-            <div className={classes.root}>
-                <AppBar position={"static"}>
-                    <Tabs value={value} onChange={handleChange} aria-label={"scib navigayion"}>
-                        <Tab label="Inventory" {...a11yProps(0)}/>
-                        <Tab label="Shipping" {...a11yProps(1)}/>
-                        <Tab label="CRM" {...a11yProps(2)}/>
-                        <Tab label="Suppliers" {...a11yProps(3)}/>
-                        <Tab label="Reporting" {...a11yProps(4)}/>
-                    </Tabs>
-                </AppBar>
-                <TabPanel value={value} index={0}>
-                    <Typography component={"div"}>
+    return (
+        <div className={classes.root}>
+            <AppBar position={"static"}>
+                <Tabs value={value} onChange={handleChange} aria-label={"scib navigayion"}>
+                    <Tab label="Inventory" {...a11yProps(0)}/>
+                    <Tab label="Shipping" {...a11yProps(1)}/>
+                    <Tab label="CRM" {...a11yProps(2)}/>
+                    <Tab label="Suppliers" {...a11yProps(3)}/>
+                    <Tab label="Reporting" {...a11yProps(4)}/>
+                </Tabs>
+            </AppBar>
+            <TabPanel value={value} index={0}>
+                <Typography component={"div"}>
+                    <InventoryProvider>
                         <Inventory/>
-                    </Typography>
-                </TabPanel>
-                <TabPanel value={value} index={1}>
-                    <Shipping/>
-                </TabPanel>
-                <TabPanel value={value} index={2}>
-                    <Customers/>
-                </TabPanel>
-                <TabPanel value={value} index={3}>
-                    <Suppliers/>
-                </TabPanel>
-                <TabPanel value={value} index={4}>
-                    <Reporting/>
-                </TabPanel>
-            </div>
-        )
+                    </InventoryProvider>
+                </Typography>
+            </TabPanel>
+            <TabPanel value={value} index={1}>
+                <Shipping/>
+            </TabPanel>
+            <TabPanel value={value} index={2}>
+                <Customers/>
+            </TabPanel>
+            <TabPanel value={value} index={3}>
+                <Suppliers/>
+            </TabPanel>
+            <TabPanel value={value} index={4}>
+                <Reporting/>
+            </TabPanel>
+        </div>
+    )
 
 }
 

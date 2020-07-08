@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"scib-svr/logging"
+	"strconv"
 )
 
 const (
@@ -156,7 +157,20 @@ func (c *Controller) UploadImage(w http.ResponseWriter, r *http.Request, ps http
 
 	imgId, err := func() (string, error) {
 		if r.FormValue("isColorImage") == "true" {
-			return 	c.s.uploadCImage(r.Context(), &items[0], ItemColor{}, bytes, filepath.Ext(handler.Filename))
+			qty, _ := strconv.Atoi(r.FormValue("cnt"))
+			stockable, _ := strconv.ParseBool(r.FormValue("stockable"))
+			available, _ := strconv.ParseBool(r.FormValue("available"))
+			index, _ := strconv.Atoi(r.FormValue("variantIndex"))
+			variant := ItemVariant {
+				Sku:       r.FormValue("sku"),
+				Color:     r.FormValue("color"),
+				Image:     "",
+				Size:      r.FormValue("size"),
+				Cnt:       qty,
+				Stockable: stockable,
+				Available: available,
+			}
+			return 	c.s.uploadVImage(r.Context(), &items[0], index, variant, bytes, filepath.Ext(handler.Filename))
 		} else {
 			return c.s.uploadImage(r.Context(), &items[0], bytes, filepath.Ext(handler.Filename))
 		}

@@ -23,27 +23,20 @@ type Item struct {
 	Description string      `json:"description" bson:"description, omitempty"`
 	Categories  []string    `json:"categories" bson:"categories, omitempty"`
 	Brand       string      `json:"brand" bson:"brand, omitempty"`
-	Sizes       []ItemSize  `json:"sizes" bson:"sizes, omitempty"`
-	Colors      []ItemColor `json:"colors" bson:"colors, omitempty"`
 	Price       float32     `json:"price" bson:"price, omitempty"`
 	Images      []string    `json:"images" bson:"images, omitempty"`
 	Supplier    string      `json:"supplier" bson:"supplier, omitempty"`
-	Sku         string      `json:"sku" bson:"sku, omitempty"`
-	Cnt         int         `json:"cnt" bson:"cnt, omitempty"`
-	Stockable   bool        `json:"stockable" bson:"stockable, omitempty"`
-	Available   bool        `json:"available" bson:"available, omitempty"`
+	Variants []ItemVariant `json:"variants" bson:"variants, omitempty"`
 }
 
-type ItemColor struct {
+type ItemVariant struct {
 	Sku       string `json:"sku" bson:"sku, omitempty"`
+	Color     string `json:"color" bson:"color, omitempty"`
 	Image     string `json:"image" bson:"image, omitempty"`
-	ColorName string `json:"color_name" bson:"colorName, omitempty"`
-	ColorCode string `json:"color_code" bson:"colorCode, omitempty"`
-}
-
-type ItemSize struct {
-	Sku      string `json:"sku" bson:"sku, omitempty"`
-	SizeName string `json:"size_name" bson:"sizeName, omitempty"`
+	Size string `json:"size" bson:"size, omitempty"`
+	Cnt       int    `json:"cnt" bson:"cnt, omitempty"`
+	Stockable bool   `json:"stockable" bson:"stockable, omitempty"`
+	Available bool   `json:"available" bson:"available, omitempty"`
 }
 
 const inventoryCollection = "inventory"
@@ -70,15 +63,25 @@ func (i *Item) removeImage(id string) bool {
 	return false
 }
 
-func (i *Item) addItemColor(color ItemColor) {
-	i.Colors = append(i.Colors, color)
+func (i *Item) removeImageFromItemVariant(id string) bool {
+	for x, v := range i.Variants {
+		if v.Image == id {
+			i.Variants[x].Image = ""
+			return true
+		}
+	}
+	return false
 }
 
-func (i *Item) removeItemColor(color ItemColor) bool {
-	for x, v := range i.Colors {
-		if v.Image == color.Image {
-			copy(i.Colors[x:], i.Colors[x+1:])
-			i.Colors = i.Colors[:len(i.Colors)-1]
+func (i *Item) addItemVariant(variant ItemVariant) {
+	i.Variants = append(i.Variants, variant)
+}
+
+func (i *Item) removeItemVariant(variant ItemVariant) bool {
+	for x, v := range i.Variants {
+		if v.Sku == variant.Sku {
+			copy(i.Variants[x:], i.Variants[x+1:])
+			i.Variants = i.Variants[:len(i.Variants)-1]
 			return true
 		}
 	}
@@ -86,19 +89,21 @@ func (i *Item) removeItemColor(color ItemColor) bool {
 }
 
 type Service struct {
-	database  *mongo.Database
-	fs        filestore.Filestore
-	log       logging.Logger
+	database *mongo.Database
+	fs       filestore.Filestore
+	log      logging.Logger
 }
 
-func (s *Service) collection(name string) *mongo.Collection  {
+func (s *Service) collection(name string) *mongo.Collection {
 	return s.database.Collection(name)
 }
 
 func NewService(filestore filestore.Filestore, logger logging.Logger) *Service {
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(fmt.Sprintf("mongodb://%s:%d",
-		configuration.MongoDbHost, configuration.MongoDbPort)))
+	opts := options.Client()
+	opts.ApplyURI(fmt.Sprintf("mongodb://%s:%d", configuration.MongoDbHost, configuration.MongoDbPort))
+	opts.SetMaxPoolSize(5)
+	client, err := mongo.Connect(ctx, opts)
 	if client != nil {
 		database := client.Database(configuration.MongoDbDatabase)
 		if err == nil {
@@ -116,7 +121,17 @@ func (s *Service) save(c context.Context, item *Item) (resultCode int, itemId st
 	uOptions.SetUpsert(true)
 	if item.Id == "" {
 		item.Id = uuid.New().String()
-		item.Sku = fmt.Sprintf("%s-%s-", strings.ToUpper(item.Brand[:4]), strings.ToUpper(item.Name[:4]))
+	}
+	for i, v := range item.Variants {
+		if v.Sku == "" {
+			sku := fmt.Sprintf("%s-%s-%s-%s-%d",
+				strings.ToUpper(item.Brand[:4]),
+				strings.ToUpper(item.Name[:4]),
+				strings.ToUpper(v.Size),
+				strings.ToUpper(v.Color),
+				i)
+			item.Variants[i].Sku = sku
+		}
 	}
 	inventory := s.collection(inventoryCollection)
 	result, err := inventory.UpdateOne(c, bson.M{"_id": bson.M{"$eq": fmt.Sprint(item.Id)}}, bson.M{"$set": item}, uOptions)
@@ -179,15 +194,19 @@ func (s *Service) uploadImage(c context.Context, item *Item, file []byte, ext st
 	return
 }
 
-func (s *Service) uploadCImage(c context.Context, item *Item, color ItemColor, file []byte, ext string) (id string, err error) {
+func (s *Service) uploadVImage(c context.Context, item *Item, index int, variant ItemVariant, file []byte, ext string) (id string, err error) {
 	id, err = s.fs.Upload(c, file, ext)
 	if err == nil {
-		color.Image = id
-		item.addItemColor(color)
+		variant.Image = id
+		if index >= len(item.Variants) {
+			item.addItemVariant(variant)
+		} else {
+			item.Variants[index].Image = id
+		}
 		_, _, err = s.save(c, item)
 	}
 	if err != nil {
-		s.log.Error(c, "upload of item color image failed because of %v", err)
+		s.log.Error(c, "upload of item variant image failed because of %v", err)
 	}
 	return
 }
@@ -197,11 +216,12 @@ func (s *Service) downloadImage(c context.Context, id string) (size int64, file 
 }
 
 func (s *Service) deleteImage(c context.Context, id string, item *Item) (err error) {
-	if item.removeImage(id) || item.removeItemColor(ItemColor{Image: id}) {
+	if item.removeImage(id) || item.removeImageFromItemVariant(id) {
 		err = s.fs.Remove(c, id)
-		if err == nil {
-			_, _, err = s.save(c, item)
+		if err != nil {
+			s.log.Error(c, err.Error())
 		}
+		_, _, err = s.save(c, item)
 	} else {
 		err = fmt.Errorf("image [%s]not found", id)
 	}
@@ -210,4 +230,3 @@ func (s *Service) deleteImage(c context.Context, id string, item *Item) (err err
 	}
 	return
 }
-

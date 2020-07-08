@@ -53,7 +53,7 @@ func (f filestore) Remove(c context.Context, fileId string) error {
 	if err == nil {
 		return bucket.Delete(fileId)
 	} else {
-		f.log.Error(c, "removal of file [%s] failed because %v", fileId, err)
+		f.log.Error(c, "removal of file %s failed because %v", fileId, err)
 		return err
 	}
 }

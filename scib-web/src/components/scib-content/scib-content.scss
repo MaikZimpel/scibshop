@@ -17,3 +17,27 @@
   justify-items: center;
   width: 70%;
 }
+
+.vertical-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.horizontal-box {
+  display: flex;
+  flex-direction: row;
+}
+
+.alt-pic {
+  width: 30px;
+  height: auto;
+  padding: 5px;
+}
+
+.disp {
+  margin: 3px;
+}
+
+.selected {
+  border: 1px solid #61dafb;
+}
