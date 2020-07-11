@@ -29,6 +29,76 @@ func NewController(service *Service, logger logging.Logger) *Controller {
 
 func (c *Controller) Get(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	items, err := c.s.queryItems(r.Context(), bson.M{})
+
+	filterFunc := func(variant ItemVariant) bool {
+
+		aFilter := func() bool {
+			if r.URL.Query().Get("available") != "" {
+				available, _ := strconv.ParseBool(r.URL.Query().Get("available"))
+				return variant.Available == available
+			} else {
+				return true
+			}
+		}()
+
+		sFilter := func() bool {
+			if r.URL.Query().Get("stockable") != "" {
+				stockable, _ := strconv.ParseBool(r.URL.Query().Get("stockable"))
+				return variant.Stockable == stockable
+			} else {
+				return true
+			}
+		}()
+
+		qFilter := func() bool {
+			if r.URL.Query().Get("qty") != "" {
+				q, e := strconv.Atoi(r.URL.Query().Get("qty"))
+				if e != nil {
+					switch r.URL.Query().Get("qty")[0:2] {
+					case "gt":
+						return variant.Cnt > func() int {
+							q, _ := strconv.Atoi(r.URL.Query().Get("qty")[2:])
+							return q
+						}()
+					case "ge":
+						return variant.Cnt >= func() int {
+							q, _ := strconv.Atoi(r.URL.Query().Get("qty")[2:])
+							return q
+						}()
+					case "lt":
+						return variant.Cnt < func() int {
+							q, _ := strconv.Atoi(r.URL.Query().Get("qty")[2:])
+							return q
+						}()
+					case "le":
+						return variant.Cnt <= func() int {
+							q, _ := strconv.Atoi(r.URL.Query().Get("qty")[2:])
+							return q
+						}()
+					default:
+						return false
+					}
+				} else {
+					return variant.Cnt == q
+				}
+			} else {
+				return true
+			}
+		}()
+
+		return aFilter && sFilter && qFilter
+	}
+
+	items = func() (res []Item) {
+		for _, item := range items {
+			item.filterVariants(filterFunc)
+			if len(item.Variants) >= 1 {
+				res = append(res, item)
+			}
+		}
+		return res
+	}()
+
 	if err != nil {
 		_, _ = fmt.Fprintf(w, "an error occured: %+v", err.Error())
 	} else {
@@ -53,7 +123,7 @@ func (c *Controller) GetById(w http.ResponseWriter, r *http.Request, ps httprout
 	}
 }
 
-func (c *Controller) getWithFilter(ctx context.Context, filter bson.M) (items []Item, err error)  {
+func (c *Controller) getWithFilter(ctx context.Context, filter bson.M) (items []Item, err error) {
 	items, err = c.s.queryItems(ctx, filter)
 	if err != nil {
 		c.l.Error(context.Background(), "error retrieving inventory items: %+v", err)
@@ -104,9 +174,10 @@ func (c *Controller) Delete(w http.ResponseWriter, r *http.Request, ps httproute
 	if err != nil {
 		code := func() int {
 			switch err {
-			case mongo.ErrNoDocuments: {
-				return http.StatusNotFound
-			}
+			case mongo.ErrNoDocuments:
+				{
+					return http.StatusNotFound
+				}
 			default:
 				return http.StatusInternalServerError
 			}
@@ -119,7 +190,7 @@ func (c *Controller) Delete(w http.ResponseWriter, r *http.Request, ps httproute
 
 func (c *Controller) UploadImage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	itemId := ps.ByName("id")
-	filter := bson.M {"_id": itemId}
+	filter := bson.M{"_id": itemId}
 	items, err := c.getWithFilter(r.Context(), filter)
 	if err != nil || items == nil {
 		if err == nil {
@@ -161,7 +232,7 @@ func (c *Controller) UploadImage(w http.ResponseWriter, r *http.Request, ps http
 			stockable, _ := strconv.ParseBool(r.FormValue("stockable"))
 			available, _ := strconv.ParseBool(r.FormValue("available"))
 			index, _ := strconv.Atoi(r.FormValue("variantIndex"))
-			variant := ItemVariant {
+			variant := ItemVariant{
 				Sku:       r.FormValue("sku"),
 				Color:     r.FormValue("color"),
 				Image:     "",
@@ -170,7 +241,7 @@ func (c *Controller) UploadImage(w http.ResponseWriter, r *http.Request, ps http
 				Stockable: stockable,
 				Available: available,
 			}
-			return 	c.s.uploadVImage(r.Context(), &items[0], index, variant, bytes, filepath.Ext(handler.Filename))
+			return c.s.uploadVImage(r.Context(), &items[0], index, variant, bytes, filepath.Ext(handler.Filename))
 		} else {
 			return c.s.uploadImage(r.Context(), &items[0], bytes, filepath.Ext(handler.Filename))
 		}

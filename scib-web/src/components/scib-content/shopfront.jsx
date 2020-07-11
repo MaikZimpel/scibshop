@@ -1,17 +1,12 @@
-import React, {useState, useEffect} from "react";
+import React, {useContext, useEffect} from "react";
 import './scib-content.scss'
-import { connect } from 'react-redux'
-import {add} from "../actions/cartActions";
-import axios from 'axios'
-import Card from '@material-ui/core/Card';
-import CardHeader from '@material-ui/core/CardHeader';
-import CardContent from '@material-ui/core/CardContent';
-import CardFooter from '@material-ui/core/CardActions';
 import {makeStyles} from "@material-ui/core/styles";
-import ShoppingCartIcon from '@material-ui/icons/ShoppingCart'
 import {ItemCard} from "./itemcard";
 import Grid from '@material-ui/core/Grid';
 import Paper from '@material-ui/core/Paper';
+import {CartContext} from "../cart-context/cartContext";
+import * as api from '../cart-context/cartApi';
+import {CartDialog} from "./cartDlg";
 
 const useStyles = makeStyles((theme) => ({
     root: {
@@ -34,31 +29,18 @@ const useStyles = makeStyles((theme) => ({
 
 export const Shopfront = () => {
 
-    const classes = useStyles();
-    const [items, setItems] = useState([]);
-    const [cart, setCart] = useState();
-
     useEffect(() => {
-        let req = {
-            url: "http://localhost:8082/inventory/?stockableOnly=false",
-            method: 'GET',
-            mode: 'no-cors'
-        };
-        axios(req)
-            .then(res => setItems(res.data))
-            .catch(console.log)
+        api.loadInventory().then(data => actions.loadInventory(data));
     }, []);
 
-
-    const handleClick = (id) => {
-        this.props.add(id)
-    }
+    const classes = useStyles();
+    const {items, actions } = useContext(CartContext);
 
     const itemList = items.map((item, index) => {
         return (
             <Grid key={index}>
                 <Paper className={classes.paper}>
-                    <ItemCard item={item}/>
+                    <ItemCard itemId={item.id}/>
                 </Paper>
             </Grid>
 
@@ -66,25 +48,14 @@ export const Shopfront = () => {
     })
 
     return (
-        <Grid container className={"item-display"} spacing={2}>
+        <Grid container className={"item-display"}>
             <Grid item xs={12}>
-                <Grid container justify={"center"} spacing={2}>
+                <Grid container justify={"center"} spacing={1}>
                     {itemList}
                 </Grid>
             </Grid>
+            <CartDialog/>
         </Grid>
     )
-}
-
-const mapStateToProps = (state) => {
-    return {
-        items: state.items
-    }
-}
-
-const mapDispatchToProps = (dispatch) => {
-    return {
-        addToCart: (id) => {dispatch(add(id))}
-    }
 }
 

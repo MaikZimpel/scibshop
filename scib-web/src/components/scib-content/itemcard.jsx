@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useContext, useState} from 'react';
 import {makeStyles} from '@material-ui/core/styles';
 import Card from '@material-ui/core/Card';
 import CardHeader from '@material-ui/core/CardHeader';
@@ -10,10 +10,12 @@ import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import {faCartPlus} from '@fortawesome/free-solid-svg-icons'
 import IconButton from '@material-ui/core/IconButton';
 import Paper from '@material-ui/core/Paper';
-import Select from '@material-ui/core/Select';
-import MenuItem from '@material-ui/core/MenuItem';
-import {ItemSizes} from "./itemSizes";
 import Avatar from '@material-ui/core/Avatar';
+import {CartContext} from "../cart-context/cartContext";
+import InfoIcon from '@material-ui/icons/Info';
+import Dialog from '@material-ui/core/Dialog';
+import DialogContent from '@material-ui/core/DialogContent';
+import DialogContentText from '@material-ui/core/DialogContentText';
 
 const useStyles = makeStyles((theme) => ({
     root: {
@@ -40,7 +42,12 @@ const useStyles = makeStyles((theme) => ({
 export const ItemCard = (props) => {
 
     const classes = useStyles();
-    const [item] = useState(props.item)
+
+    const {items, actions} = useContext(CartContext);
+    const [item] = useState(items.find(i => i.id === props.itemId));
+    const [descriptionDlgOpen, setDescriptionDlgOpen] = useState(false);
+
+
     const [selected, setSelected] = useState(0)
     const [selectedImage, setSelectedImage] = useState(0)
 
@@ -56,23 +63,53 @@ export const ItemCard = (props) => {
         setSelectedImage(index)
     }
 
+    const addItemToCart = () => {
+        actions.addToCart(item.id, item.variants[selected].sku, item.price, 1);
+    }
+
+    function toggleDescriptionDlg() {
+        setDescriptionDlgOpen(!descriptionDlgOpen);
+    }
+
+    const itemSubheader = () => {
+        return (
+            <>
+                {item.name}<IconButton onClick={toggleDescriptionDlg}><InfoIcon fontSize={"small"}/></IconButton>
+                <DescriptionDialog />
+            </>
+        )
+    }
+
+    const DescriptionDialog = () => {
+        return (
+            <Dialog open={descriptionDlgOpen} onClose={toggleDescriptionDlg}>
+                <DialogContent>
+                    <DialogContentText>{item.description}</DialogContentText>
+                </DialogContent>
+            </Dialog>
+        )
+    }
+
     return (
         <Card className={classes.root} variant={"outlined"} elevation={2} key={item.id}
-              style={{width: '300PX', height: '450px', 'margin-bottom': '10px'}}>
+              style={{width: '300PX', height: '500px', 'margin-bottom': '10px'}}>
             <CardHeader
-                title={item.name}
-                subheader={item.description}
+                title={item.brand}
+                subheader={itemSubheader()}
             />
             <CardContent className={"horizontal-box"}>
+
                 <CardMedia>
                     <img alt={""} className={"product-pic"}
-                         src={"http://localhost:8082/inventory/" + item.id + "/images/" + item.images[selectedImage]}/>
+                         src={"http://192.168.178.35:8082/inventory/" + item.id + "/images/" + item.images[selectedImage]}/>
                 </CardMedia>
+
                 <div className={"vertical-box"}>
                     {
                         item.images.map((val, index) => {
                             return (
-                                <Avatar alt={index} src={"http://localhost:8082/inventory/" + item.id + "/images/" + val}
+                                <Avatar alt={index}
+                                        src={"http://192.168.178.35:8082/inventory/" + item.id + "/images/" + val}
                                         onMouseOver={selectImage.bind(this, index)}/>
                             )
                         })
@@ -82,33 +119,31 @@ export const ItemCard = (props) => {
             <CardContent>
                 {item.price} EUR
                 <Paper elevation={1} variant={"outlined"} square style={{"margin-top": "10px", "padding": "3px"}}>
-                    <div>Erhältlich in</div>
-                        <div className={"horizontal-box"}>
-                            {
-                                item.colors ?
-                                    item.colors.map((color, index) => {
-                                        return (
-                                            <div onClick={select.bind(this, index)} className={`${isSelected(index) ? "selected" : ""}`}>
-                                                <Tooltip title={color.color_name}>
-                                                    <img key={index} alt={color.color_name}
-                                                         className={"alt-pic"}
-                                                         src={"http://localhost:8082/inventory/" + item.id + "/images/" + color.image}/>
-                                                </Tooltip>
-                                            </div>
-                                        )
-                                    })
-                                    :
-                                    <div/>
-                            }
-                        </div>
-                    {
-                        item.sizes ? <ItemSizes sizes={item.sizes}/> : <div/>
-                    }
+                    <div>Farben</div>
+                    <div className={"horizontal-box"}>
+                        {
+                            item.variants ?
+                                item.variants.map((variant, index) => {
+                                    return (
+                                        <div onClick={select.bind(this, index)}
+                                             className={`${isSelected(index) ? "selected" : ""}`}>
+                                            <Tooltip title={variant.color}>
+                                                <img key={index} alt={variant.image}
+                                                     className={"alt-pic"}
+                                                     src={"http://192.168.178.35:8082/inventory/" + item.id + "/images/" + variant.image}/>
+                                            </Tooltip>
+                                        </div>
+                                    )
+                                })
+                                :
+                                <div/>
+                        }
+                    </div>
                 </Paper>
             </CardContent>
             <CardActions>
                 <Tooltip title={'In den Einkaufswagen'}>
-                    <IconButton aria-label={'addToCart'}>
+                    <IconButton aria-label={'addToCart'} onClick={addItemToCart}>
                         <FontAwesomeIcon icon={faCartPlus}/>
                     </IconButton>
                 </Tooltip>

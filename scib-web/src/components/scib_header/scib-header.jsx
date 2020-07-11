@@ -1,4 +1,4 @@
-import React, {Component} from 'react';
+import React, {Component, useContext} from 'react';
 import logo from './scib-logo.jpg'
 import './scib_header.scss'
 import IconButton from '@material-ui/core/IconButton';
@@ -7,35 +7,39 @@ import ShoppingCartIcon from '@material-ui/icons/ShoppingCart';
 import EmailIcon from '@material-ui/icons/Email'
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import {faFacebook, faInstagram, faTwitter} from '@fortawesome/free-brands-svg-icons'
+import {CartContext} from "../cart-context/cartContext";
+import Badge from '@material-ui/core/Badge';
+import { withStyles } from '@material-ui/core/styles';
 
-class ScibHeader extends Component {
+const StyledBadge = withStyles((theme) => ({
+    badge: {
+        right: -3,
+        top: 13,
+        border: `2px solid ${theme.palette.background.paper}`,
+        padding: '0 4px',
+    },
+}))(Badge);
+
+const ScibHeader = () => {
+
+    const {cart, actions} = useContext(CartContext);
 
 
-    render() {
         return (
             <div>
                 <div className={"clearfix"}>
                     <img className={"logo"} src={logo} alt={"SCIB Logo"}/>
-
                     <div className={"social-buttons"}>
-                        <Tooltip title={"Show shopping cart"} className={"overflow"}>
-                            <IconButton aria-label={"cart"}>
-                                <ShoppingCartIcon/>
+                        <Tooltip title={"Total: EUR " + cart.total} className={"overflow"}>
+                            <IconButton aria-label={"cart"} onClick={actions.toggleCartDialog}>
+                                <StyledBadge badgeContent={cart.itemQty} color="secondary">
+                                    <ShoppingCartIcon/>
+                                </StyledBadge>
                             </IconButton>
                         </Tooltip>
                         <Tooltip title={"Drop us a mail"} className={"overflow"}>
                             <IconButton aria-label={"mail"}>
                                 <EmailIcon/>
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title={"Follow us on Facebook"}>
-                            <IconButton aria-label={"facebook"}>
-                                <FontAwesomeIcon icon={faFacebook} size={"0.5x"}/>
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title={"Follow us on Twitter"}>
-                            <IconButton aria-label={"twitter"}>
-                                <FontAwesomeIcon icon={faTwitter} size={"0.5x"}/>
                             </IconButton>
                         </Tooltip>
                         <Tooltip title={"Follow us on Instagram"}>
@@ -47,7 +51,7 @@ class ScibHeader extends Component {
                 </div>
             </div>
         )
-    }
+
 }
 
 export default ScibHeader;

@@ -88,6 +88,16 @@ func (i *Item) removeItemVariant(variant ItemVariant) bool {
 	return false
 }
 
+func (i *Item) filterVariants(filter func(ItemVariant) bool) {
+	var filteredVariants []ItemVariant
+	for _, variant := range i.Variants {
+		if filter(variant) {
+			filteredVariants = append(filteredVariants, variant)
+		}
+	}
+	i.Variants = filteredVariants
+}
+
 type Service struct {
 	database *mongo.Database
 	fs       filestore.Filestore

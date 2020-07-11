@@ -2,7 +2,7 @@ import axios from "axios";
 
 export async function loadInventory() {
     async function fetch() {
-        const result = await axios('http://localhost:8082/inventory/?stockableOnly=false');
+        const result = await axios('http://localhost:8082/inventory/');
         return result.data
     }
 
