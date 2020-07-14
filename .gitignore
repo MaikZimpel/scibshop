@@ -8,3 +8,5 @@ node_modules
 /scib-web/build/
 /scib-web/yarn-error.log
 .DS_Store
+/scib-svr/auth/auth_config.json
+/scib-svr/auth_config.json
