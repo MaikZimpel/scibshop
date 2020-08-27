@@ -8,7 +8,7 @@ import AppBar from '@material-ui/core/AppBar';
 import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
 import {InventoryProvider} from "../inventory/inventoryContext";
-
+import {Customers} from '../crm/customers'
 
 function TabPanel(props) {
     const {children, value, index, ...other} = props;
@@ -82,7 +82,9 @@ export default function Appcontainer() {
                 <Shipping/>
             </TabPanel>
             <TabPanel value={value} index={2}>
-                <Customers/>
+                <Typography component={"div"}>
+                    <Customers/>
+                </Typography>
             </TabPanel>
             <TabPanel value={value} index={3}>
                 <Suppliers/>
@@ -97,10 +99,6 @@ export default function Appcontainer() {
 
 function Shipping() {
     return <span>Shipments</span>
-}
-
-function Customers() {
-    return <span>Customer Relationship Management</span>
 }
 
 function Suppliers() {

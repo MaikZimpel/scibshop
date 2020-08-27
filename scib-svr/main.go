@@ -10,6 +10,7 @@ import (
 	"os"
 	"scib-svr/auth"
 	"scib-svr/configuration"
+	"scib-svr/crm"
 	"scib-svr/filestore"
 	"scib-svr/inventory"
 	"scib-svr/logging"
@@ -17,22 +18,19 @@ import (
 
 func main() {
 	logger, router := configure()
-	inventoryController := inventory.NewController(
-		inventory.NewService(filestore.New(), logger),
-		logger)
-
-
+	inventoryController := inventory.NewController(inventory.NewService(filestore.New(), logger), logger)
+	customerController := crm.NewController(crm.NewService(logger), logger)
 	
 	// inventory routes
-	router.GET("/", auth.WithAuthentication(defaultHandler))
+	router.GET("/", auth.Authenticate(defaultHandler, logger))
 	router.GET(inventory.RequestUri, inventoryController.Get)
 	router.GET(inventory.RequestUri + "/:id", inventoryController.GetById)
-	router.POST(inventory.RequestUri, auth.WithAuthentication(inventoryController.Create))
-	router.PUT(inventory.RequestUri + "/:id", auth.WithAuthentication(inventoryController.Update))
-	router.DELETE(inventory.RequestUri + "/:id", auth.WithAuthentication(inventoryController.Delete))
-	router.POST(inventory.RequestUri + "/:id/images", auth.WithAuthentication(inventoryController.UploadImage))
+	router.POST(inventory.RequestUri, auth.Authenticate(inventoryController.Create, logger))
+	router.PUT(inventory.RequestUri + "/:id", auth.Authenticate(inventoryController.Update, logger))
+	router.DELETE(inventory.RequestUri + "/:id", auth.Authenticate(inventoryController.Delete, logger))
+	router.POST(inventory.RequestUri + "/:id/images", auth.Authenticate(inventoryController.UploadImage, logger))
 	router.GET(inventory.RequestUri + "/:id/images/:imageId", inventoryController.GetImage)
-	router.DELETE(inventory.RequestUri + "/:id/images/:imageId", auth.WithAuthentication(inventoryController.DeleteImage))
+	router.DELETE(inventory.RequestUri + "/:id/images/:imageId", auth.Authenticate(inventoryController.DeleteImage, logger))
 
 
 	// shop routes
@@ -40,6 +38,12 @@ func main() {
 	router.GET(makeUri(shopping.RequestUri, []string{"id"}), shopping.GetById)
 	router.POST(makeUri(shopping.RequestUri, nil), shopping.Post)
 	router.PUT(makeUri(shopping.RequestUri, []string{"id"}), shopping.Put)*/
+
+	// crm routes
+	router.GET(crm.RequestUri, auth.Authenticate(customerController.Get, logger))
+	router.POST(crm.RequestUri, auth.Authenticate(customerController.CreateOrUpdate, logger))
+	router.PUT(crm.RequestUri, auth.Authenticate(customerController.CreateOrUpdate, logger))
+	router.DELETE(crm.RequestUri, auth.Authenticate(customerController.Delete, logger))
 
 	port := os.Getenv("SERVER_PORT")
 
