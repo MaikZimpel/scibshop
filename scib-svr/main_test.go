@@ -8,16 +8,15 @@ import (
 
 func TestMakeUri(t *testing.T) {
 
-	tables := []struct{
-		uri string
-		params []string
+	tables := []struct {
+		uri      string
+		params   []string
 		expected string
-	} {
-		{"hello",[]string{"world"},"/hello/:world"},
+	}{
+		{"hello", []string{"world"}, "/hello/:world"},
 		{inventory.RequestUri, []string{"id"}, "/" + inventory.RequestUri + "/:id"},
 		{inventory.RequestUri, []string{}, "/" + inventory.RequestUri},
 		{inventory.RequestUri, nil, "/" + inventory.RequestUri},
-
 	}
 
 	for _, table := range tables {
@@ -28,7 +27,6 @@ func TestMakeUri(t *testing.T) {
 	}
 }
 
-
 func makeUri(uri string, params []string) string {
 	var paramStr string
 	if params != nil {
@@ -36,5 +34,5 @@ func makeUri(uri string, params []string) string {
 			paramStr += "/:" + param
 		}
 	}
-	return fmt.Sprintf("/%s%s",uri, paramStr)
+	return fmt.Sprintf("/%s%s", uri, paramStr)
 }

@@ -17,23 +17,23 @@ import (
 )
 
 type Item struct {
-	Id          string      `json:"id" bson:"_id, omitempty"`
-	Upc         string      `json:"upc" bson:"upc, omitempty"`
-	Name        string      `json:"name" bson:"name, omitempty"`
-	Description string      `json:"description" bson:"description, omitempty"`
-	Categories  []string    `json:"categories" bson:"categories, omitempty"`
-	Brand       string      `json:"brand" bson:"brand, omitempty"`
-	Price       float32     `json:"price" bson:"price, omitempty"`
-	Images      []string    `json:"images" bson:"images, omitempty"`
-	Supplier    string      `json:"supplier" bson:"supplier, omitempty"`
-	Variants []ItemVariant `json:"variants" bson:"variants, omitempty"`
+	Id          string        `json:"id" bson:"_id, omitempty"`
+	Upc         string        `json:"upc" bson:"upc, omitempty"`
+	Name        string        `json:"name" bson:"name, omitempty"`
+	Description string        `json:"description" bson:"description, omitempty"`
+	Categories  []string      `json:"categories" bson:"categories, omitempty"`
+	Brand       string        `json:"brand" bson:"brand, omitempty"`
+	Price       float32       `json:"price" bson:"price, omitempty"`
+	Images      []string      `json:"images" bson:"images, omitempty"`
+	Supplier    string        `json:"supplier" bson:"supplier, omitempty"`
+	Variants    []ItemVariant `json:"variants" bson:"variants, omitempty"`
 }
 
 type ItemVariant struct {
 	Sku       string `json:"sku" bson:"sku, omitempty"`
 	Color     string `json:"color" bson:"color, omitempty"`
 	Image     string `json:"image" bson:"image, omitempty"`
-	Size string `json:"size" bson:"size, omitempty"`
+	Size      string `json:"size" bson:"size, omitempty"`
 	Cnt       int    `json:"cnt" bson:"cnt, omitempty"`
 	Stockable bool   `json:"stockable" bson:"stockable, omitempty"`
 	Available bool   `json:"available" bson:"available, omitempty"`

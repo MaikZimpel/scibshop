@@ -10,10 +10,7 @@ const (
 	RequestUri = "store"
 )
 
-
-
 func Put(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-
 
 }
 

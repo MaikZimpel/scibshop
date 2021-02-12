@@ -1,4 +1,4 @@
 security:
-    clientSecret: Dp8ShgfWFaND63NmRVep2rpyVpdF543pkBqBCLFLXx
+  clientSecret: Dp8ShgfWFaND63NmRVep2rpyVpdF543pkBqBCLFLXx
 server:
-    port: 8082
+  port: 8082

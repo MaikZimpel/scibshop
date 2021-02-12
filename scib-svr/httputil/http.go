@@ -16,4 +16,3 @@ func addCookie(w http.ResponseWriter, name, value string, ttl time.Duration) {
 	}
 	http.SetCookie(w, &cookie)
 }
-

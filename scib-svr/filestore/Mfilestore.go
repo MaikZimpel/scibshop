@@ -25,7 +25,7 @@ func (f filestore) Upload(c context.Context, file []byte, fileExt string) (id st
 	if err == nil {
 		id = uuid.New().String()
 		fn := id + fileExt
-		err := bucket.UploadFromStreamWithID(id, id + fileExt, bytes.NewBuffer(file))
+		err := bucket.UploadFromStreamWithID(id, id+fileExt, bytes.NewBuffer(file))
 		if err == nil {
 			f.log.Debug(c, "new file [%s] uploaded to filestore with id %v [%d Byte]", fn, id, len(file))
 		}
@@ -36,7 +36,7 @@ func (f filestore) Upload(c context.Context, file []byte, fileExt string) (id st
 	return
 }
 
-func (f filestore) Download(c context.Context, fileId string) (size int64, file []byte, err error){
+func (f filestore) Download(c context.Context, fileId string) (size int64, file []byte, err error) {
 	bucket, err := gridfs.NewBucket(f.client.Database(f.db))
 	if err == nil {
 		var buf bytes.Buffer

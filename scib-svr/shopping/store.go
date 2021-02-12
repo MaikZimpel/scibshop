@@ -1,7 +1,7 @@
 package shopping
 
 type Cart struct {
-	Id    string `json:"id"`
+	Id    string         `json:"id"`
 	Picks map[string]int `json:"picks"` // sku[qty]
 }
 
