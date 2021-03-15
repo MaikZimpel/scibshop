@@ -2,24 +2,22 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/julienschmidt/httprouter"
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"net/http"
 	"scib-svr/configuration"
 	"scib-svr/logging"
 	"time"
 )
 
 type User struct {
-	Username string `json:"username" bson:"username, omitempty"`
-	Password string `json:"password" bson:"password, omitempty"`
-	Roles []string `json:"roles" bson:"roles"`
-	Token string `json:"token" bson:"token"`
+	Id       string   `json:"id" bson:"_id omitempty"`
+	Username string   `json:"username" bson:"username, omitempty"`
+	Password string   `json:"password" bson:"password, omitempty"`
+	Roles    []string `json:"roles" bson:"roles"`
+	Token    string   `json:"token" bson:"token"`
 }
 
 type Service struct {
@@ -37,16 +35,12 @@ func NewService(logger logging.Logger) *Service {
 	opts.ApplyURI(fmt.Sprintf("mongodb://%s:%d", configuration.MongoDbHost, configuration.MongoDbPort))
 	opts.SetMaxPoolSize(5)
 	client, err := mongo.Connect(ctx, opts)
-	if client != nil {
-		database := client.Database(configuration.MongoDbDatabase)
-		if err == nil {
-			return &Service{database, logger}
-		} else {
-			logger.Critical(context.Background(), "%v", err)
-			return nil
-		}
+	if err != nil {
+		logger.Critical(context.Background(), "%v", err)
+		return nil
 	}
-	return nil
+	database := client.Database(configuration.MongoDbDatabase)
+	return &Service{database, logger}
 }
 
 func (s *Service) byUsername(c context.Context, username string) (*User, error) {
@@ -56,29 +50,33 @@ func (s *Service) byUsername(c context.Context, username string) (*User, error) 
 	return user, err
 }
 
-func (s *Service) SignIn(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	username := ps.ByName("username")
-	password := ps.ByName("password")
-	user, err := s.byUsername(r.Context(), username)
+func (s *Service) SignIn(c context.Context, username string, password string) (*User, error) {
+	user, err := s.byUsername(c, username)
 	if err == nil && user.Password == password {
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"roles": user.Roles,
-		})
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, token)
+		return user, nil
+	} else {
+		return nil, fmt.Errorf("authentication failed")
 	}
 }
 
-func (s *Service) Save(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	user := User{}
-	if err := json.NewDecoder(r.Body).Decode(&user); err == nil {
-		var uOptions = &options.UpdateOptions{}
-		uOptions.SetUpsert(true)
-		if _, err := s.collection(userCollection).UpdateOne(r.Context(), bson.M{"username": user.Username},user, uOptions); err == nil {
+func (s *Service) Save(c context.Context, user *User) (int64, error) {
+	var uOptions = &options.UpdateOptions{}
+	uOptions.SetUpsert(true)
+	if user.Id == "" {
+		user.Id = uuid.New().String()
+	}
+	updateResult, err := s.collection(userCollection).UpdateOne(c, bson.M{"_id": bson.M{"$eq": fmt.Sprint(user.Id)}}, bson.M{"$set": user}, uOptions)
+	s.log.Info(c, "update result: %v", updateResult)
+	return 1, err
+}
 
+func (s *Service) queryUsers(c context.Context, filter bson.M) (userVector []User, err error) {
+	users := s.collection(userCollection)
+	csr, err := users.Find(c, filter)
+	if err == nil && csr != nil {
+		if err = csr.All(c, &userVector); err != nil {
+			s.log.Error(c, "%v", err)
 		}
 	}
-
-
-
+	return
 }

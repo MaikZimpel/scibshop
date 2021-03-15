@@ -1,15 +1,19 @@
-import React from 'react';
+import React, {useState} from 'react';
 import './App.css';
 
 import Appcontainer from "./components/appcontainer/appcontainer";
+import Login from "./components/signin/Login"
 
-class App extends React.Component {
+export default function App() {
 
-      render() {
-          return(
-            <Appcontainer/>
-          )
-      }
+    const [token, setToken] = useState();
+
+    if (!token) {
+        return <Login setToken={setToken} />
+    }
+
+    return (
+        <Appcontainer/>
+    )
 }
 
-export default App;

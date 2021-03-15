@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/cors"
 	"golang.org/x/net/context"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"scib-svr/auth"
@@ -21,17 +23,19 @@ func main() {
 	inventoryController := inventory.NewController(inventory.NewService(filestore.New(), logger), logger)
 	customerController := crm.NewController(crm.NewService(logger), logger)
 	authService := auth.NewService(logger)
-	
+	_ = configureUsers(authService, logger)
+	authController := auth.NewController(authService, logger)
+
 	// inventory routes
-	router.GET("/", auth.Authenticate(defaultHandler, logger))
+	router.GET("/", authController.Authenticate(defaultHandler))
 	router.GET(inventory.RequestUri, inventoryController.Get)
 	router.GET(inventory.RequestUri+"/:id", inventoryController.GetById)
-	router.POST(inventory.RequestUri, auth.Authenticate(inventoryController.Create, logger))
-	router.PUT(inventory.RequestUri+"/:id", auth.Authenticate(inventoryController.Update, logger))
-	router.DELETE(inventory.RequestUri+"/:id", auth.Authenticate(inventoryController.Delete, logger))
-	router.POST(inventory.RequestUri+"/:id/images", auth.Authenticate(inventoryController.UploadImage, logger))
+	router.POST(inventory.RequestUri, authController.Authenticate(inventoryController.Create))
+	router.PUT(inventory.RequestUri+"/:id", authController.Authenticate(inventoryController.Update))
+	router.DELETE(inventory.RequestUri+"/:id", authController.Authenticate(inventoryController.Delete))
+	router.POST(inventory.RequestUri+"/:id/images", authController.Authenticate(inventoryController.UploadImage))
 	router.GET(inventory.RequestUri+"/:id/images/:imageId", inventoryController.GetImage)
-	router.DELETE(inventory.RequestUri+"/:id/images/:imageId", auth.Authenticate(inventoryController.DeleteImage, logger))
+	router.DELETE(inventory.RequestUri+"/:id/images/:imageId", authController.Authenticate(inventoryController.DeleteImage))
 
 	// shop routes
 	/*router.GET(makeUri(shopping.RequestUri, nil), shopping.Get)
@@ -40,13 +44,16 @@ func main() {
 	router.PUT(makeUri(shopping.RequestUri, []string{"id"}), shopping.Put)*/
 
 	// crm routes
-	router.GET(crm.RequestUri, auth.Authenticate(customerController.Get, logger))
-	router.POST(crm.RequestUri, auth.Authenticate(customerController.CreateOrUpdate, logger))
-	router.PUT(crm.RequestUri, auth.Authenticate(customerController.CreateOrUpdate, logger))
-	router.DELETE(crm.RequestUri, auth.Authenticate(customerController.Delete, logger))
+	router.GET(crm.RequestUri, authController.Authenticate(customerController.Get))
+	router.POST(crm.RequestUri, authController.Authenticate(customerController.CreateOrUpdate))
+	router.PUT(crm.RequestUri, authController.Authenticate(customerController.CreateOrUpdate))
+	router.DELETE(crm.RequestUri, authController.Authenticate(customerController.Delete))
 
 	// auth routes
-	router.POST("/auth/token", authService.SignIn)
+	router.POST("/auth/token", authController.SignIn)
+
+	// user routes
+	router.GET(auth.RequestUri, authController.Authenticate(authController.Get))
 
 	port := os.Getenv("SERVER_PORT")
 
@@ -71,6 +78,30 @@ func main() {
 	logger.Critical(context.Background(), "%s", http.ListenAndServe(fmt.Sprintf(":%s", port), corsHandler))
 }
 
+func configureUsers(service *auth.Service, logger logging.Logger) error {
+	usersFile, e := os.Open("users.json")
+	if e != nil {
+		return e
+	}
+	defer usersFile.Close()
+	bytes, e := ioutil.ReadAll(usersFile)
+	if e != nil {
+		return e
+	}
+	var usersArray []auth.User
+	e = json.Unmarshal(bytes, &usersArray)
+	if e != nil {
+		return e
+	}
+	for _, user := range usersArray {
+		_, err := service.Save(context.Background(), &user)
+		if err != nil {
+			logger.Critical(context.Background(), "an error occurred when trying to save user: %v", err)
+		}
+	}
+	return nil
+}
+
 func defaultHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	_, _ = fmt.Fprintf(w, "<H1>Welcome to SCIB</H1>")
 }
@@ -88,6 +119,7 @@ func configure() (logger logging.Logger, router *httprouter.Router) {
 		panicConfig(logger, err)
 	}
 	router = httprouter.New()
+
 	return
 }
 

@@ -8,6 +8,8 @@ services:
       - api
     ports:
       - "3001:80"
+    environment:
+      - "API_URL=http://localhost"
     networks:
       - network1
   web:
@@ -35,7 +37,7 @@ services:
   mongodb:
     image: mongo
     ports:
-      - "27018:27017"
+      - "27017:27017"
     volumes:
       - "mongodata:/data/db"
     networks:

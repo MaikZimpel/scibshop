@@ -14,20 +14,20 @@ import (
 )
 
 type Customer struct {
-	Id 		string 	`json:"id" bson:"_id, omitempty"`
-	Email	string	`json:"email" bson:"email, omitempty"`
-	Name	string	`json:"name" bson:"name, omitempty"`
+	Id        string    `json:"id" bson:"_id, omitempty"`
+	Email     string    `json:"email" bson:"email, omitempty"`
+	Name      string    `json:"name" bson:"name, omitempty"`
 	Addresses []Address `json:"addresses" bson:"addresses, omitempty"`
-	Phone	string	`json:"phone" bson:"phone, omitempty"`
+	Phone     string    `json:"phone" bson:"phone, omitempty"`
 }
 
 type Address struct {
-	Id		string	`json:"id" bson:"id, omitempty"`
-	Country	string	`json:"country" bson:"country, omitempty"`
-	City	string	`json:"city" bson:"city, omitempty"`
-	Code 	string	`json:"code" bson:"code, omitempty"`
-	Street	string	`json:"street" bson:"street, omitempty"`
-	Type	AddressType `json:"type" bson:"type, omitempty"`
+	Id      string      `json:"id" bson:"id, omitempty"`
+	Country string      `json:"country" bson:"country, omitempty"`
+	City    string      `json:"city" bson:"city, omitempty"`
+	Code    string      `json:"code" bson:"code, omitempty"`
+	Street  string      `json:"street" bson:"street, omitempty"`
+	Type    AddressType `json:"type" bson:"type, omitempty"`
 }
 
 type AddressType int
@@ -72,7 +72,7 @@ func (c *Customer) addressByType(addressType AddressType) *Address {
 
 type Service struct {
 	database *mongo.Database
-	log logging.Logger
+	log      logging.Logger
 }
 
 func (s *Service) collection(name string) *mongo.Collection {
@@ -151,4 +151,3 @@ func (s *Service) delete(c context.Context, id string) (customer *Customer, err 
 	}
 	return
 }
-

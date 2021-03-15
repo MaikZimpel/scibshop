@@ -19,7 +19,7 @@ export const Inventory = () => {
 
     const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
     const [selectedItemIndex, setSelectedItemIndex] = useState(0);
-    const { items, selectedItem, actions } = useContext(InventoryContext);
+    const {items, selectedItem, actions} = useContext(InventoryContext);
 
     useEffect(() => {
         api.loadInventory().then(data => actions.loadInventory(data));
@@ -35,7 +35,7 @@ export const Inventory = () => {
     const deleteSelectedItem = () => {
         api.removeItem(selectedItem).then(delOk => {
             console.log({delOk})
-            if(delOk) {
+            if (delOk) {
                 actions.removeItem(selectedItem);
             } else {
                 console.log("item could not be removed");
@@ -100,15 +100,16 @@ export const Inventory = () => {
             <Grid container spacing={2}>
                 {
                     items ?
-                    items.map((item, index) => {
-                        return (
-                            <Grid item key={item.id}>
-                                <div onClick={() => selectItem(item.id, index)} className={`${isSelected(index) ? "selected" : ""}`}>
-                                    <InventoryCard itemId={item.id}/>
-                                </div>
-                            </Grid>
-                        );
-                    }): <div/>
+                        items.map((item, index) => {
+                            return (
+                                <Grid item key={item.id}>
+                                    <div onClick={() => selectItem(item.id, index)}
+                                         className={`${isSelected(index) ? "selected" : ""}`}>
+                                        <InventoryCard itemId={item.id}/>
+                                    </div>
+                                </Grid>
+                            );
+                        }) : <div/>
                 }
             </Grid>
         </div>
